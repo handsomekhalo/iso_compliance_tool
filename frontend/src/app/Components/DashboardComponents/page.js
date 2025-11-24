@@ -1,6 +1,8 @@
 import StatCard from "../DashboardCards/StartCatdComponent";
 import { FileText, TrendingUp, Coins, AlertTriangle } from "lucide-react";
 import UploadFileButton from "./UploadFileComponent";
+import ReconciliationsTable from "../Reconcilliation_Components/reconcilliation_table";
+import PanzarActivityFeed from "../Panzar_Components/page";
 
 export default function DashboardPage() {
   const stats = {
@@ -52,9 +54,21 @@ export default function DashboardPage() {
 
       </div>
       
-      <div className="mt-10 max-w-md mx-auto">
+      <div className="mt-5">
         <UploadFileButton />
       </div>
+
+            
+      <div className="mt-5 ">
+        <ReconciliationsTable />
+      </div>
+
+        <div className="mt-5 ">
+        <PanzarActivityFeed />
+      </div>
+
+
+{/*  */}
 
     </div>
   );

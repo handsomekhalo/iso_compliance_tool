@@ -1,20 +1,50 @@
+import secrets
 from django.db import models
 
 # Create your models here.
 from django.db import models
 from django.contrib.auth.models import User  # Use Django's built-in User
 
+# class Bank(models.Model):
+#     """Simple bank partner for sandbox testing"""
+#     name = models.CharField(max_length=200)
+#     contact_email = models.EmailField()
+#     api_key = models.CharField(max_length=255, unique=True)
+#     is_active = models.BooleanField(default=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+    
+#     def __str__(self):
+#         return self.name
 class Bank(models.Model):
-    """Simple bank partner for sandbox testing"""
+    """Bank partner for RandRail platform"""
     name = models.CharField(max_length=200)
-    contact_email = models.EmailField()
-    api_key = models.CharField(max_length=255, unique=True)
+    contact_email = models.EmailField(unique=True)
+    api_key = models.CharField(max_length=64, unique=True, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    # Link to Django User for dashboard login
+    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
     
     def __str__(self):
         return self.name
-
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate API key if not exists
+        if not self.api_key:
+            self.api_key = self.generate_api_key()
+        super().save(*args, **kwargs)
+    
+    @staticmethod
+    def generate_api_key():
+        """Generate unique API key"""
+        return f"rr_{secrets.token_urlsafe(32)}"
+    
+    class Meta:
+        verbose_name = "Bank"
+        verbose_name_plural = "Banks"
+        ordering = ['-created_at']
 
 class ISOReconciliationLog(models.Model):
     """Track ISO 20022 reconciliation attempts"""
