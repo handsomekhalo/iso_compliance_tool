@@ -71,6 +71,19 @@ class ISOReconciliationLog(models.Model):
         return ((self.total_transactions - self.mismatches) / self.total_transactions) * 100
 
 
+class ISODocument(models.Model):
+    bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name="iso_documents")
+    file_name = models.CharField(max_length=255)
+    file_url = models.CharField(max_length=1024)  # Backblaze or S3 URL
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    file_size_bytes = models.BigIntegerField(null=True, blank=True)
+    file_hash = models.CharField(max_length=255, blank=True, null=True)  # SHA256 for audit
+    log = models.ForeignKey(ISOReconciliationLog, on_delete=models.CASCADE, related_name="documents")
+
+    def __str__(self):
+        return self.file_name
+
+
 class ZARPMintEvent(models.Model):
     """Track stablecoin minting events - rename to your new coin name"""
     bank = models.ForeignKey(Bank, on_delete=models.CASCADE, related_name='mint_events', null=True, blank=True)
