@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { Upload, Loader2 } from "lucide-react";
+import UploadPage from "./uploadFile";
 
 export default function UploadFileButton({ onUpload, isUploading }) {
   const [dragActive, setDragActive] = useState(false);
@@ -19,11 +20,13 @@ export default function UploadFileButton({ onUpload, isUploading }) {
 
     const file = e.dataTransfer.files?.[0];
     if (file) onUpload(file);
+    
   };
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
     if (file) onUpload(file);
+    
   };
 
   return (
@@ -41,6 +44,7 @@ export default function UploadFileButton({ onUpload, isUploading }) {
           <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
         ) : (
           <Upload className="w-8 h-8 text-gray-600" />
+          // <Upload onSuccess={(data) => console.log("Uploaded:", data)} />
         )}
       </div>
 

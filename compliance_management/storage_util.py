@@ -211,6 +211,60 @@ def upload_iso_xml_to_backblaze(xml_file, bank_id, filename):
         return None, None, None
 
 
+
+def open_iso_xml_in_backblaze(filepath):
+    """
+    Generates a presigned URL for an ISO XML file stored on Backblaze B2 for inline viewing.
+    
+    Args:
+        filepath: Full URL or key of the file in Backblaze
+    
+    Returns:
+        str: Presigned URL or original filepath if error occurs
+    """
+    import pathlib
+    from botocore.exceptions import ClientError
+    
+    bucket = settings.BACK_BLAZE_BUCKET_NAME
+    s3 = get_backblaze_client()
+
+    # Normalize filepath to extract key
+    filepath_str = str(filepath)
+    if filepath_str.startswith("http") and bucket in filepath_str:
+        key = filepath_str.split(f"{bucket}/")[-1]
+    elif bucket not in filepath_str:
+        key = filepath_str
+    else:
+        key = filepath_str.split(f"{bucket}/")[-1]
+
+    # Content type for XML
+    content_type = "application/xml"
+
+    # Check if file exists
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+    except ClientError as e:
+        print(f"[HEAD ERROR] {e}")
+        return filepath_str  # Return original if file not found
+
+    # Generate presigned URL
+    try:
+        url = s3.generate_presigned_url(
+            ClientMethod='get_object',
+            Params={
+                'Bucket': bucket,
+                'Key': key,
+                'ResponseContentDisposition': 'inline',
+                'ResponseContentType': content_type
+            },
+            ExpiresIn=3600  # 1 hour
+        )
+        return url
+    except ClientError as e:
+        print(f"[PRESIGN ERROR] {e}")
+        return filepath_str
+
+
 def delete_iso_xml_from_backblaze(file_url):
     """
     Delete ISO XML file from Backblaze B2

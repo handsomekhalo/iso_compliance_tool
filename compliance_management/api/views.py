@@ -235,9 +235,15 @@ def upload_reconciliation_api(request):
     POST /api/reconcile/upload/
     Upload and process ISO 20022 XML file + store in cloud
     """
+    data=request.data
+
+    print(f"Request data: {data}")
+
+
     serializer = UploadFileOnlySerializer(data=request.data)
     
     if not serializer.is_valid():
+        print("serializer not")
         return Response({
             'message': 'Invalid file upload',
             'errors': serializer.errors

@@ -3,8 +3,12 @@ import { FileText, TrendingUp, Coins, AlertTriangle } from "lucide-react";
 import UploadFileButton from "./UploadFileComponent";
 import ReconciliationsTable from "../Reconcilliation_Components/reconcilliation_table";
 import PanzarActivityFeed from "../Panzar_Components/page";
+import ReconciliationFiles from "../Reconcilliation_Components/get_all_reconcillation_files";
+import UploadPage from "./uploadFile";
 
 export default function DashboardPage() {
+  
+
   const stats = {
     totalReconciliations: 12,
     averageAccuracy: 97,
@@ -54,13 +58,20 @@ export default function DashboardPage() {
 
       </div>
       
-      <div className="mt-5">
+      {/* <div className="mt-5">
         <UploadFileButton />
+      </div> */}
+      
+<div className="mt-5">
+        {/* ✅ Render UploadPage instead of UploadFileButton */}
+        <UploadPage />
       </div>
+
 
             
       <div className="mt-5 ">
-        <ReconciliationsTable />
+        {/* <ReconciliationsTable /> */}
+        <ReconciliationFiles/>
       </div>
 
         <div className="mt-5 ">

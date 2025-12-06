@@ -33,8 +33,8 @@ urlpatterns = [
     # path('', login_view),  # Root URL will redirect to Next.js landing page
     # path('', redirect_to_nextjs),  # Root URL will redirect to Next.js landing page
     path('', views.login_view, name='login_view'),
-    path('compliance_management/', include('compliance_management.urls')),
-    path('compliance_management_api/', include('compliance_management.api.urls')),
+    path('compliance_management/',include('compliance_management.urls')),
+    path('compliance_management_api/',include('compliance_management.api.urls')),
 
 
 
