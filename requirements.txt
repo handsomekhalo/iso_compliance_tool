@@ -51,3 +51,4 @@ psycopg2-binary==2.9.9
 python-decouple==3.8
 requests==2.31.0
 whitenoise==6.6.0
+python=3.12.6
