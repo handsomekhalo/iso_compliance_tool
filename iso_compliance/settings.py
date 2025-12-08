@@ -238,7 +238,14 @@ CORS_ALLOW_CREDENTIALS = True
 # CORS Settings (for Next.js frontend)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https://randrail.vercel.app",  # Your Vercel domain
+    "https://iso-compliance-tool-d8326zelr-titus-projects-cdab7abf.vercel.app",
+
+        # Your Vercel domain
+]
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://iso-compliance-tool-d8326zelr-titus-projects-cdab7abf.vercel.app"
 ]
 
 CORS_ALLOW_CREDENTIALS = True
