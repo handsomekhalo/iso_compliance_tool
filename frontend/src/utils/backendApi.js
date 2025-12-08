@@ -6,7 +6,8 @@ import axios from 'axios';
 const backendApi = axios.create({
   // baseURL:'http://3.144.218.251',
  
-  baseURL: "http://127.0.0.1:8000",
+  // baseURL: "http://127.0.0.1:8000",
+  baseURL: 'crossover.proxy.rlwy.net/',
     // 👈 Public IP of your EC2 instance
   withCredentials: true,          // Ensures cookies (like CSRF token) are sent
   headers: {
