@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 
-from compliance_management.models import AMLAlert, Bank, ISODocument, ISOReconciliationLog, SandboxUser, ZARPBurnEvent, ZARPMintEvent
+from compliance_management.models import AMLAlert, Bank, ISODocument, ISOProfile, ISOReconciliationLog, SandboxUser, ZARPBurnEvent, ZARPMintEvent
 
 
 class UserModelSerializer(serializers.ModelSerializer):
@@ -14,6 +14,7 @@ class UserModelSerializer(serializers.ModelSerializer):
 #     class Meta:
 #         model = Bank
 #         fields = "__all__"
+
 
 
 class BankRegistrationSerializer(serializers.Serializer):
@@ -31,28 +32,72 @@ class BankRegistrationSerializer(serializers.Serializer):
         return value
     
     def create(self, validated_data):
-        """Create bank and associated user"""
-        # Create Django User for login
         user = User.objects.create_user(
-            username=validated_data['contact_email'],  # Use email as username
+            username=validated_data['contact_email'],
             email=validated_data['contact_email'],
             password=validated_data['password']
         )
-        
-        # Create Bank
+
+        # ✅ Get default ISO profile
+        iso_profile = ISOProfile.objects.filter(is_default=True).first()
+
+        if not iso_profile:
+            raise serializers.ValidationError(
+                "No default ISO profile configured in system"
+            )
+
         bank = Bank.objects.create(
             name=validated_data['bank_name'],
             contact_email=validated_data['contact_email'],
-            user=user
+            user=user,
+            iso_profile=iso_profile   # ✅ ASSIGNED HERE
         )
-        
+
         return bank
+
+    
+    # def create(self, validated_data):
+    #     """Create bank and associated user"""
+    #     # Create Django User for login
+    #     user = User.objects.create_user(
+    #         username=validated_data['contact_email'],  # Use email as username
+    #         email=validated_data['contact_email'],
+    #         password=validated_data['password']
+    #     )
+        
+    #     # Create Bank
+    #     bank = Bank.objects.create(
+    #         name=validated_data['bank_name'],
+    #         contact_email=validated_data['contact_email'],
+    #         user=user
+    #     )
+        
+    #     return bank
+
+class ISOProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ISOProfile
+        fields = "__all__"
+
+
+class BankSResponseSerializer(serializers.ModelSerializer):
+    iso_profile = ISOProfileSerializer()
+
+    class Meta:
+        model = Bank
+        fields = [
+            "id",
+            "bank_name",
+            "bic",
+            "iso_profile",
+        ]
 
 
 class BankLoginSerializer(serializers.Serializer):
     """Serializer for bank login"""
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
+
 
 
 class BankDetailSerializer(serializers.ModelSerializer):
@@ -305,3 +350,17 @@ class AMLAlertSerializer(serializers.ModelSerializer):
     class Meta:
         model = AMLAlert
         fields = "__all__"
+
+
+class BankSerializer(serializers.ModelSerializer):
+    iso_profile = ISOProfileSerializer(read_only=True)
+
+    class Meta:
+        model = Bank
+        fields = [
+            "id",
+            "name",
+            "contact_email",
+            "api_key",
+            "iso_profile",
+        ]

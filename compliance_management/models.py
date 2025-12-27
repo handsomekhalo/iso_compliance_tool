@@ -16,6 +16,8 @@ class ISOProfile(models.Model):
     message_type = models.CharField(max_length=20)  # pacs.008, camt.053
     version = models.CharField(max_length=10, default="001.08")
     description = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False)  # ✅ ADD THIS
+
 
     # Remittance rules
     requires_structured_remittance = models.BooleanField(default=False)
@@ -31,46 +33,81 @@ class ISOProfile(models.Model):
         return f"{self.name} ({self.message_type})"
 
 #
+
 class Bank(models.Model):
-    """Bank partner for RandRail platform"""
+    """
+    Bank partner for RandRail platform
+    System-managed compliance entity
+    """
+
+    # Core identity
     name = models.CharField(max_length=200)
     contact_email = models.EmailField(unique=True)
-    api_key = models.CharField(max_length=64, unique=True, blank=True)
-    is_active = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    # Link to Django User for dashboard login
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
 
+    # Auth / access
+    api_key = models.CharField(max_length=64, unique=True, blank=True)
+    # is_active = models.BooleanField(default=True)
+
+    # Platform linkage
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="bank"
+    )
+
+    # Compliance (system-controlled)
     iso_profile = models.ForeignKey(
-        ISOProfile,
+        "ISOProfile",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="banks"
     )
-    
 
-    
-    def __str__(self):
-        return self.name
-    
-    def save(self, *args, **kwargs):
-        # Auto-generate API key if not exists
-        if not self.api_key:
-            self.api_key = self.generate_api_key()
-        super().save(*args, **kwargs)
-    
-    @staticmethod
-    def generate_api_key():
-        """Generate unique API key"""
-        return f"rr_{secrets.token_urlsafe(32)}"
-    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         verbose_name = "Bank"
         verbose_name_plural = "Banks"
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        """
+        System-enforced defaults:
+        - Generate API key
+        - Assign default ISO profile
+        """
+
+        # Generate API key once
+        if not self.api_key:
+            self.api_key = self.generate_api_key()
+
+        # Auto-assign default ISO profile (infra-owned)
+        if not self.iso_profile:
+            from .models import ISOProfile  # safe local import
+            self.iso_profile = (
+                ISOProfile.objects
+                .filter(is_default=True, is_active=True)
+                .order_by("id")
+                .first()
+            )
+
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_api_key():
+        """
+        Generate a secure, URL-safe API key
+        """
+        return f"rr_{secrets.token_urlsafe(32)}"
+
 
 class ISOReconciliationLog(models.Model):
     """Track ISO 20022 reconciliation attempts"""
