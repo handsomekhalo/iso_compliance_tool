@@ -19,91 +19,7 @@ import hashlib
 from typing import Tuple, List, Dict
 from lxml import etree
 
-# def parse_iso20022_xml(xml_content: str) -> Tuple[int, int, List[Dict]]:
-#     """
-#     Parse ISO 20022 XML and find mismatches using lxml for full XPath support.
 
-#     Returns:
-#         (total_transactions, mismatches_count, mismatch_details)
-#     """
-#     try:
-#         # Remove XML comments
-#         xml_content = re.sub(r'<!--.*?-->', '', xml_content, flags=re.DOTALL)
-
-#         # Parse XML with lxml
-#         root = etree.fromstring(xml_content.encode('utf-8'))
-
-#         transactions = []
-#         mismatches = []
-
-#         # Common ISO 20022 transaction elements
-#         transaction_tags = [
-#             'CdtTrfTxInf',      # pain.001 - Credit Transfer
-#             'DrctDbtTxInf',     # pain.008 - Direct Debit
-#             'TxInf',            # camt.053 - Bank Statement
-#             'Tx',               # Generic
-#             'PmtInf',           # Payment Information
-#         ]
-
-#         # Find all transactions using XPath with local-name()
-#         for tag in transaction_tags:
-#             transactions.extend(root.xpath(f'//*[local-name()="{tag}"]'))
-
-#         total_transactions = len(transactions)
-
-#         # If no transactions found, try broader search
-#         if total_transactions == 0:
-#             transactions = root.xpath('//*[contains(local-name(), "Tx") or contains(local-name(), "Pmt")]')
-#             total_transactions = len(transactions)
-
-#         # Validate each transaction
-#         for idx, txn in enumerate(transactions):
-#             issues = []
-
-#             # Check for Amount
-#             amount_elem = txn.xpath('.//*[contains(local-name(), "Amt") or contains(local-name(), "Amount")]')
-#             has_amount = bool(amount_elem)
-
-#             # Check for Debtor
-#             debtor_elem = txn.xpath('.//*[contains(local-name(), "Dbtr") or contains(local-name(), "Debtor")]')
-#             has_debtor = bool(debtor_elem)
-
-#             # Check for Creditor
-#             creditor_elem = txn.xpath('.//*[contains(local-name(), "Cdtr") or contains(local-name(), "Creditor")]')
-#             has_creditor = bool(creditor_elem)
-
-#             if not has_amount:
-#                 issues.append('Amount')
-#             if not has_debtor:
-#                 issues.append('Debtor')
-#             if not has_creditor:
-#                 issues.append('Creditor')
-
-#             if issues:
-#                 mismatches.append({
-#                     'transaction_index': idx + 1,
-#                     'issue': 'Missing required fields',
-#                     'missing_fields': issues,
-#                     'details': {
-#                         'has_amount': has_amount,
-#                         'has_debtor': has_debtor,
-#                         'has_creditor': has_creditor,
-#                         'amount_value': amount_elem[0].text if has_amount else None,
-#                         'debtor_name': debtor_elem[0].xpath('.//*[contains(local-name(), "Nm")]/text()')[0]
-#                                        if has_debtor and debtor_elem[0].xpath('.//*[contains(local-name(), "Nm")]/text()')
-#                                        else None,
-#                         'creditor_name': creditor_elem[0].xpath('.//*[contains(local-name(), "Nm")]/text()')[0]
-#                                          if has_creditor and creditor_elem[0].xpath('.//*[contains(local-name(), "Nm")]/text()')
-#                                          else None
-#                     }
-#                 })
-
-#         return total_transactions, len(mismatches), mismatches
-
-#     except etree.XMLSyntaxError as e:
-#         raise ValueError(f"Invalid XML format: {str(e)}")
-#     except Exception as e:
-#         raise ValueError(f"Error parsing XML: {type(e).__name__} - {str(e)}")
 
 def parse_iso20022_xml(xml_content: str) -> Tuple[int, int, List[Dict]]:
     """
@@ -305,59 +221,7 @@ def parse_iso20022_file(file_content: bytes, filename: str) -> Tuple[int, int, L
         raise ValueError(f"Error parsing {file_extension.upper()}: {str(e)}")
 
 
-# def parse_iso20022_xml(xml_content: str) -> Tuple[int, int, List[Dict]]:
-#     """Parse ISO 20022 XML format (your existing function)"""
-#     try:
-#         root = ET.fromstring(xml_content)
-        
-#         transactions = []
-#         mismatches = []
-        
-#         # Common ISO 20022 transaction elements
-#         transaction_tags = [
-#             'CdtTrfTxInf',      # pain.001 - Credit Transfer
-#             'DrctDbtTxInf',     # pain.008 - Direct Debit
-#             'TxInf',            # camt.053 - Bank Statement
-#             'Tx',               # Generic
-#             'PmtInf',           # Payment Information
-#         ]
-        
-#         for tag in transaction_tags:
-#             for elem in root.iter():
-#                 if elem.tag.endswith(tag):
-#                     transactions.append(elem)
-        
-#         total_transactions = len(transactions)
-        
-#         # If no transactions found, try counting payment entries differently
-#         if total_transactions == 0:
-#             # Look for any element with "Tx" or "Pmt" in tag name
-#             for elem in root.iter():
-#                 if 'Tx' in elem.tag or 'Pmt' in elem.tag:
-#                     transactions.append(elem)
-#             total_transactions = len(transactions)
-        
-#         # Validate transactions
-#         for idx, txn in enumerate(transactions):
-#             has_amount = txn.find('.//*[contains(local-name(), "Amt")]') is not None
-#             has_debtor = txn.find('.//*[contains(local-name(), "Dbtr")]') is not None
-#             has_creditor = txn.find('.//*[contains(local-name(), "Cdtr")]') is not None
-            
-#             if not (has_amount and has_debtor and has_creditor):
-#                 mismatches.append({
-#                     'transaction_index': idx + 1,
-#                     'issue': 'Missing required fields',
-#                     'details': {
-#                         'has_amount': has_amount,
-#                         'has_debtor': has_debtor,
-#                         'has_creditor': has_creditor
-#                     }
-#                 })
-        
-#         return total_transactions, len(mismatches), mismatches
-    
-#     except ET.ParseError as e:
-#         raise ValueError(f"Invalid XML format: {str(e)}")
+
 
 
 def parse_iso20022_excel(file_content: bytes) -> Tuple[int, int, List[Dict]]:

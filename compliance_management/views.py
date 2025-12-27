@@ -49,6 +49,8 @@ def csrf(request):
     Sets the CSRF cookie and returns the token
     """
     token = get_token(request)
+
+    print(f"CSRF token set: {token}")  # Debugging line
     return JsonResponse({'csrfToken': token})
 
 

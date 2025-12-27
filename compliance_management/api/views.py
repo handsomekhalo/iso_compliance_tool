@@ -476,36 +476,7 @@ def get_reconciliation_stats_api(request):
         'data': serializer.data
     }, status=status.HTTP_200_OK)
 
-
-# @api_view(['DELETE'])
-# @permission_classes([IsAuthenticated])
-# def delete_reconciliation(request, log_id):
-#     """
-#     DELETE /api/reconcile/<log_id>/
-#     Delete a reconciliation log (soft delete for sandbox)
-#     """
-#     try:
-#         bank = Bank.objects.get(user=request.user)
-#         recon_log = ISOReconciliationLog.objects.get(id=log_id, bank=bank)
-        
-#         filename = recon_log.filename
-#         recon_log.delete()
-        
-#         return Response({
-#             'message': f'Reconciliation "{filename}" deleted successfully'
-#         }, status=status.HTTP_200_OK)
-    
-#     except Bank.DoesNotExist:
-#         return Response({
-#             'message': 'Bank not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-#     except ISOReconciliationLog.DoesNotExist:
-#         return Response({
-#             'message': 'Reconciliation log not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-    
-
-
+ 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -572,38 +543,3 @@ def get_document_detail_api(request, document_id):
         return Response({
             'message': 'Document not found'
         }, status=status.HTTP_404_NOT_FOUND)
-
-
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
-# def delete_document_api(request, document_id):
-#     """
-#     DELETE /api/reconcile/documents/<document_id>/
-#     Delete document from cloud storage and database
-#     """
-#     try:
-#         bank = Bank.objects.get(user=request.user)
-#         document = ISODocument.objects.get(id=document_id, bank=bank)
-        
-#         # Delete from cloud storage first
-#         file_url = document.file_url
-#         file_name = document.file_name
-        
-#         # Delete cloud file
-#         delete_from_cloud_storage(file_url)
-        
-#         # Delete database record
-#         document.delete()
-        
-#         return Response({
-#             'message': f'Document "{file_name}" deleted successfully'
-#         }, status=status.HTTP_200_OK)
-    
-#     except Bank.DoesNotExist:
-#         return Response({
-#             'message': 'Bank not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-#     except ISODocument.DoesNotExist:
-#         return Response({
-#             'message': 'Document not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
