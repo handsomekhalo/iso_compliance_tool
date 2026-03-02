@@ -29,4 +29,4 @@ whitenoise==6.8.2
 uvicorn==0.41.0
 
 # Modern PostgreSQL driver (supports Python 3.14)
-psycopg[binary]==3.3.3
+psycopg[binary]>=3.2,<3.4
