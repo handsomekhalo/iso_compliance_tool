@@ -1,3 +1,6 @@
+"use client";
+
+
 import StatCard from "../DashboardCards/StartCatdComponent";
 import { FileText, TrendingUp, Coins, AlertTriangle } from "lucide-react";
 import UploadFileButton from "./UploadFileComponent";
