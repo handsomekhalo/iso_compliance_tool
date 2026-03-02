@@ -1,3 +1,5 @@
+'use client';
+
 import React, { useState, useRef } from "react";
 import { Upload, Loader2 } from "lucide-react";
 import UploadPage from "./uploadFile";

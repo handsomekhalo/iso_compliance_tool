@@ -14,6 +14,8 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 import os
 from pathlib import Path
 
+import dj_database_url
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 from decouple import config
@@ -26,15 +28,27 @@ from decouple import config
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY')
 
+DEBUG = config('DEBUG', default=False, cast=bool)
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = []
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
+
+# Add Railway/Vercel domains
+if not DEBUG:
+    ALLOWED_HOSTS.extend([
+        '.railway.app',
+        '.vercel.app',
+        'randrail.railway.app',  # Your custom domain
+    ])
 
 
 # Application definition
@@ -70,6 +84,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Must be first
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add this
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -80,6 +95,9 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware', 
 
 ]
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 
 ROOT_URLCONF = 'iso_compliance.urls'
 
@@ -106,18 +124,35 @@ WSGI_APPLICATION = 'iso_compliance.wsgi.application'
 # https://docs.djangoproject.com/en/5.0/ref/settings/#databases
 
 
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.postgresql',
+#         'NAME': config('DB_NAME'),
+#         'USER': config('DB_USER'),
+#         'PASSWORD': config('DB_PASSWORD'),
+#         'HOST': config('DB_HOST'),
+#         'PORT': config('DB_PORT'),
+#     }
+# }
+
+# DATABASES = {
+#     'default': {
+#         # 'ENGINE': 'django.db.backends.postgresql',
+        
+#         'NAME': config('PGDATABASE', default='railway'),
+#         'USER': config('PGUSER', default='postgres'),
+#         'PASSWORD': config('PGPASSWORD', default=''),
+#         'HOST': config('PGHOST', default='localhost'),
+#         'PORT': config('PGPORT', default='5432'),
+#     }
+# }
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME'),
-        'USER': config('DB_USER'),
-        'PASSWORD': config('DB_PASSWORD'),
-        'HOST': config('DB_HOST'),
-        'PORT': config('DB_PORT'),
-    }
+    'default': dj_database_url.config(
+        default=config('DATABASE_URL', default='sqlite:///db.sqlite3'),
+        conn_max_age=600,
+        conn_health_checks=True,
+    )
 }
-
-
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -211,10 +246,25 @@ CORS_ALLOW_ALL_ORIGINS = True  # Temporarily set to True for debugging
 CORS_ALLOW_CREDENTIALS = True
 
 # Alternative: Specific origins (use this after debugging)
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+# ]
+# CORS Settings (for Next.js frontend)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "https://iso-compliance-tool.vercel.app/",
+
+        # Your Vercel domain
 ]
+
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://iso-compliance-tool.vercel.app/"
+]
+
+CORS_ALLOW_CREDENTIALS = True
+
 
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -263,7 +313,7 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 
 # BACKBLAZE
 BACK_BLAZE_KEY_ID = config('BACK_BLAZE_KEY_ID')
-BACK_BLAZE_KEY_NAME = config('BACK_BLAZE_KEY_NAME')
+# BACK_BLAZE_KEY_NAME = config('BACK_BLAZE_KEY_NAME')
 BACK_BLAZE_BUCKET_NAME = config('BACK_BLAZE_BUCKET_NAME')
 
 BACK_BLAZE_APLLICATION_KEY =config('BACK_BLAZE_APLLICATION_KEY')
