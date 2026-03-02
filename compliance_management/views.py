@@ -49,6 +49,8 @@ def csrf(request):
     Sets the CSRF cookie and returns the token
     """
     token = get_token(request)
+
+    print(f"CSRF token set: {token}")  # Debugging line
     return JsonResponse({'csrfToken': token})
 
 
@@ -170,57 +172,185 @@ def login(request):
 
 @csrf_exempt
 def upload_reconciliation(request):
+    """
+    Proxy endpoint:
+    Browser → Django view → DRF upload_reconciliation_api
+    """
+
     if request.method != "POST":
-        return JsonResponse({'status': 'error', 'message': 'Only POST requests are allowed'}, status=405)
+        return JsonResponse(
+            {"status": "error", "message": "Only POST requests are allowed"},
+            status=405
+        )
 
     try:
-        # Extract token from header or session
+        # ---------------------------------------
+        # 1. Resolve auth token
+        # ---------------------------------------
         auth_header = request.headers.get("Authorization", "")
         token = None
 
         if auth_header.startswith("Token "):
-            token = auth_header.split("Token ")[-1]
+            token = auth_header.replace("Token ", "").strip()
         elif auth_header.startswith("Bearer "):
-            token = auth_header.split("Bearer ")[-1]
+            token = auth_header.replace("Bearer ", "").strip()
+        else:
+            token = request.session.get("token")
 
         if not token:
-            token = request.session.get('token')
+            return JsonResponse(
+                {"status": "error", "message": "Authentication required"},
+                status=401
+            )
 
-        if not token:
-            return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
-
-        # ✅ Get user from token
+        # ---------------------------------------
+        # 2. Validate token + bank
+        # ---------------------------------------
         try:
-            user = Token.objects.select_related("user").get(key=token).user
+            token_obj = Token.objects.select_related("user").get(key=token)
+            user = token_obj.user
             bank = Bank.objects.get(user=user)
         except Token.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Invalid token'}, status=401)
+            return JsonResponse(
+                {"status": "error", "message": "Invalid token"},
+                status=401
+            )
         except Bank.DoesNotExist:
-            return JsonResponse({'status': 'error', 'message': 'Bank not found'}, status=404)
+            return JsonResponse(
+                {"status": "error", "message": "Bank not found"},
+                status=404
+            )
 
-        # Get uploaded file
-        uploaded_file = request.FILES.get('file_name')
+        # ---------------------------------------
+        # 3. Validate uploaded file
+        # ---------------------------------------
+        uploaded_file = request.FILES.get("file_name")
         if not uploaded_file:
-            return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
+            return JsonResponse(
+                {"status": "error", "message": "No file uploaded"},
+                status=400
+            )
 
-        # Prepare headers for API call
-        headers = {"Authorization": f"Token {token}"}
-        file_name= {'file_name': (uploaded_file.name, uploaded_file.read(), uploaded_file.content_type)}
+        # VERY IMPORTANT — reset file pointer
+        uploaded_file.seek(0)
 
-        # ✅ Include bank_id in API call if needed
-        data = {'bank_id': bank.id}
+        # ---------------------------------------
+        # 4. Forward request to DRF API
+        # ---------------------------------------
+        headers = {
+            "Authorization": f"Token {token}"
+        }
+
+        files = {
+            "file_name": (
+                uploaded_file.name,
+                uploaded_file,
+                uploaded_file.content_type
+            )
+        }
+
+        # Optional extra fields (safe)
+        data = {}
+        if request.POST.get("bank_name"):
+            data["bank_name"] = request.POST.get("bank_name")
 
         url = f"{host_url(request)}{reverse_lazy('upload_reconciliation_api')}"
-        response_data = requests.post(url, headers=headers, files=file_name, data=data, timeout=30)
 
-        if response_data.status_code in [200, 201]:
-            return JsonResponse({'status': 'success', 'data': response_data.json()})
+        response = requests.post(
+            url,
+            headers=headers,
+            files=files,
+            data=data,
+            timeout=60
+        )
 
-        error_message = response_data.json().get('message', 'Upload failed')
-        return JsonResponse({'status': 'error', 'message': error_message}, status=response_data.status_code)
+        # ---------------------------------------
+        # 5. Return response cleanly
+        # ---------------------------------------
+        try:
+            payload = response.json()
+        except ValueError:
+            payload = {"raw_response": response.text}
+
+        if response.status_code in (200, 201):
+            return JsonResponse(
+                {"status": "success", "data": payload},
+                status=response.status_code
+            )
+
+        return JsonResponse(
+            {
+                "status": "error",
+                "message": payload.get("message", "Upload failed"),
+                "details": payload,
+            },
+            status=response.status_code
+        )
 
     except Exception as e:
-        return JsonResponse({'status': 'error', 'message': f'Unexpected error: {str(e)}'}, status=500)
+        return JsonResponse(
+            {
+                "status": "error",
+                "message": "Unexpected server error",
+                "error": str(e),
+            },
+            status=500
+        )
+
+
+# @csrf_exempt
+# def upload_reconciliation(request):
+#     if request.method != "POST":
+#         return JsonResponse({'status': 'error', 'message': 'Only POST requests are allowed'}, status=405)
+
+#     try:
+#         # Extract token from header or session
+#         auth_header = request.headers.get("Authorization", "")
+#         token = None
+
+#         if auth_header.startswith("Token "):
+#             token = auth_header.split("Token ")[-1]
+#         elif auth_header.startswith("Bearer "):
+#             token = auth_header.split("Bearer ")[-1]
+
+#         if not token:
+#             token = request.session.get('token')
+
+#         if not token:
+#             return JsonResponse({'status': 'error', 'message': 'Authentication required'}, status=401)
+
+#         # ✅ Get user from token
+#         try:
+#             user = Token.objects.select_related("user").get(key=token).user
+#             bank = Bank.objects.get(user=user)
+#         except Token.DoesNotExist:
+#             return JsonResponse({'status': 'error', 'message': 'Invalid token'}, status=401)
+#         except Bank.DoesNotExist:
+#             return JsonResponse({'status': 'error', 'message': 'Bank not found'}, status=404)
+
+#         # Get uploaded file
+#         uploaded_file = request.FILES.get('file_name')
+#         if not uploaded_file:
+#             return JsonResponse({'status': 'error', 'message': 'No file uploaded'}, status=400)
+
+#         # Prepare headers for API call
+#         headers = {"Authorization": f"Token {token}"}
+#         file_name= {'file_name': (uploaded_file.name, uploaded_file.read(), uploaded_file.content_type)}
+
+#         # ✅ Include bank_id in API call if needed
+#         data = {'bank_id': bank.id}
+
+#         url = f"{host_url(request)}{reverse_lazy('upload_reconciliation_api')}"
+#         response_data = requests.post(url, headers=headers, files=file_name, data=data, timeout=30)
+
+#         if response_data.status_code in [200, 201]:
+#             return JsonResponse({'status': 'success', 'data': response_data.json()})
+
+#         error_message = response_data.json().get('message', 'Upload failed')
+#         return JsonResponse({'status': 'error', 'message': error_message}, status=response_data.status_code)
+
+#     except Exception as e:
+#         return JsonResponse({'status': 'error', 'message': f'Unexpected error: {str(e)}'}, status=500)
 
 # @csrf_exempt
 # def upload_reconciliation(request):

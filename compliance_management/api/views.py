@@ -47,7 +47,7 @@ from compliance_management.views import login
 
 
 
-from .serializers import BankDetailSerializer, BankLoginSerializer, BankRegistrationResponseSerializer, BankRegistrationSerializer, GetISODocumentListSerializer, GetISOReconciliationStatsSerializer, ISODocumentSerializer, ISOReconciliationDetailSerializer, ISOReconciliationListSerializer, UploadFileOnlySerializer, UserModelSerializer
+from .serializers import BankDetailSerializer, BankLoginSerializer, BankRegistrationResponseSerializer, BankRegistrationSerializer, BankSerializer, GetISODocumentListSerializer, GetISOReconciliationStatsSerializer, ISODocumentSerializer, ISOReconciliationDetailSerializer, ISOReconciliationListSerializer, UploadFileOnlySerializer, UserModelSerializer
 
 
 @api_view(["POST"])
@@ -143,65 +143,117 @@ def register_bank_api(request):
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['POST'])
+# @api_view(['POST'])
+# @permission_classes([AllowAny])
+# def login_bank_api(request):
+#     """
+#     POST /api/auth/login/
+#     Login bank user and return token
+#     """
+#     serializer = BankLoginSerializer(data=request.data)
+#     # bank = Bank.objects.select_related("iso_profile").get(user=user)
+
+    
+#     if serializer.is_valid():
+#         email = serializer.validated_data['email']
+#         password = serializer.validated_data['password']
+        
+#         # Authenticate user (using email as username)
+#         try:
+#             user = User.objects.get(email=email)
+#             # user = authenticate(username=user.username, password=password)
+#             user = authenticate(request, username=user.username, password=password)
+#         except User.DoesNotExist:
+#             user = None
+        
+#         if user is not None:
+#             # Get associated bank
+#             try:
+#                 bank = Bank.objects.get(user=user)
+                
+#                 if not bank.is_active:
+#                     return Response({
+#                         'message': 'Bank account is inactive'
+#                     }, status=status.HTTP_403_FORBIDDEN)
+                
+#                 # Create or get token
+#                 token, _ = Token.objects.get_or_create(user=user)
+                
+#                 # Login user (for session-based auth if needed)
+#                 # login(request, user)
+                
+#                 return Response({
+#                     'message': 'Login successful',
+#                     'token': token.key,
+#                     'bank_id': bank.id,
+#                     'bank_name': bank.name,
+#                     'api_key': bank.api_key,
+#                       'iso_profile': {
+#                         'id': bank.iso_profile.id if bank.iso_profile else None,
+#                         'name': bank.iso_profile.name if bank.iso_profile else None,
+#                         'message_type': bank.iso_profile.message_type if bank.iso_profile else None
+#                     }
+
+#                 }, status=status.HTTP_200_OK)
+                
+#             except Bank.DoesNotExist:
+#                 return Response({
+#                     'message': 'Bank account not found'
+#                 }, status=status.HTTP_404_NOT_FOUND)
+#         else:
+#             return Response({
+#                 'message': 'Invalid email or password'
+#             }, status=status.HTTP_401_UNAUTHORIZED)
+    
+#     return Response({
+#         'message': 'Invalid input',
+#         'errors': serializer.errors
+#     }, status=status.HTTP_400_BAD_REQUEST)
+
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def login_bank_api(request):
     """
-    POST /api/auth/login/
-    Login bank user and return token
+    Bank login endpoint
     """
     serializer = BankLoginSerializer(data=request.data)
-    
-    if serializer.is_valid():
-        email = serializer.validated_data['email']
-        password = serializer.validated_data['password']
-        
-        # Authenticate user (using email as username)
-        try:
-            user = User.objects.get(email=email)
-            # user = authenticate(username=user.username, password=password)
-            user = authenticate(request, username=user.username, password=password)
-        except User.DoesNotExist:
-            user = None
-        
-        if user is not None:
-            # Get associated bank
-            try:
-                bank = Bank.objects.get(user=user)
-                
-                if not bank.is_active:
-                    return Response({
-                        'message': 'Bank account is inactive'
-                    }, status=status.HTTP_403_FORBIDDEN)
-                
-                # Create or get token
-                token, _ = Token.objects.get_or_create(user=user)
-                
-                # Login user (for session-based auth if needed)
-                # login(request, user)
-                
-                return Response({
-                    'message': 'Login successful',
-                    'token': token.key,
-                    'bank_id': bank.id,
-                    'bank_name': bank.name,
-                    'api_key': bank.api_key
-                }, status=status.HTTP_200_OK)
-                
-            except Bank.DoesNotExist:
-                return Response({
-                    'message': 'Bank account not found'
-                }, status=status.HTTP_404_NOT_FOUND)
-        else:
-            return Response({
-                'message': 'Invalid email or password'
-            }, status=status.HTTP_401_UNAUTHORIZED)
-    
-    return Response({
-        'message': 'Invalid input',
-        'errors': serializer.errors
-    }, status=status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
 
+    email = serializer.validated_data["email"]
+    password = serializer.validated_data["password"]
+
+    # Authenticate user
+    user = authenticate(request, username=email, password=password)
+
+    if not user:
+        return Response(
+            {"detail": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
+    # Fetch bank WITH iso_profile
+    try:
+        bank = (
+            Bank.objects
+            .select_related("iso_profile")
+            .get(user=user)
+        )
+    except Bank.DoesNotExist:
+        return Response(
+            {"detail": "No active bank profile linked to this user"},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Create or fetch token
+    token, _ = Token.objects.get_or_create(user=user)
+
+    return Response(
+        {
+            "token": token.key,
+            "bank": BankSerializer(bank).data
+        },
+        status=status.HTTP_200_OK
+    )
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -241,6 +293,8 @@ def upload_reconciliation_api(request):
 
 
     serializer = UploadFileOnlySerializer(data=request.data)
+    print(data, "uplaoding")
+    # serializer = UploadFileOnlySerializer(data=request.data,files=request.FILES)
     
     if not serializer.is_valid():
         print("serializer not")
@@ -252,6 +306,13 @@ def upload_reconciliation_api(request):
     # Get bank from authenticated user
     try:
         bank = Bank.objects.get(user=request.user)
+
+        iso_profile = bank.iso_profile
+        if not iso_profile:
+            return Response({
+                'message': 'No ISO profile configured for this bank'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     except Bank.DoesNotExist:
         return Response({
             'message': 'Bank not found for authenticated user'
@@ -275,7 +336,12 @@ def upload_reconciliation_api(request):
         file_extension = uploaded_file.name.lower().split('.')[-1]
         
         if file_extension == 'xml':
-            total_transactions, mismatches_count, mismatch_details = parse_iso20022_xml(xml_content)
+            # total_transactions, mismatches_count, mismatch_details = parse_iso20022_xml(xml_content)
+            total_transactions, mismatches_count, mismatch_details = parse_iso20022_xml(
+                    xml_content=xml_content,
+                    iso_profile=iso_profile
+                )
+
         else:
             # For other formats, use the generic parser
             total_transactions, mismatches_count, mismatch_details = parse_iso20022_file(
@@ -308,6 +374,7 @@ def upload_reconciliation_api(request):
         # Create reconciliation log
         recon_log = ISOReconciliationLog.objects.create(
             bank=bank,
+            iso_profile=iso_profile,
             filename=uploaded_file.name,
             total_transactions=total_transactions,
             mismatches=mismatches_count,
@@ -316,7 +383,18 @@ def upload_reconciliation_api(request):
             result_json=result_json,
             processing_time_ms=processing_time
         )
-        
+
+        # recon_log = ISOReconciliationLog.objects.create(
+        #     bank=bank,
+        #     filename=uploaded_file.name,
+        #     total_transactions=total_transactions,
+        #     mismatches=mismatches_count,
+        #     xrpl_hash=xrpl_hash,
+        #     raw_xml=xml_content,
+        #     result_json=result_json,
+        #     processing_time_ms=processing_time
+        # )
+
         # Create document record
         iso_document = ISODocument.objects.create(
             bank=bank,
@@ -329,7 +407,9 @@ def upload_reconciliation_api(request):
         
         # Serialize response
         response_serializer = ISOReconciliationDetailSerializer(recon_log)
-        document_serializer = UploadFileOnlySerializer(iso_document)
+        # document_serializer = UploadFileOnlySerializer(iso_document)
+        document_serializer = ISODocumentSerializer(iso_document)
+
         
         return Response({
             'message': 'Reconciliation completed successfully',
@@ -476,36 +556,7 @@ def get_reconciliation_stats_api(request):
         'data': serializer.data
     }, status=status.HTTP_200_OK)
 
-
-# @api_view(['DELETE'])
-# @permission_classes([IsAuthenticated])
-# def delete_reconciliation(request, log_id):
-#     """
-#     DELETE /api/reconcile/<log_id>/
-#     Delete a reconciliation log (soft delete for sandbox)
-#     """
-#     try:
-#         bank = Bank.objects.get(user=request.user)
-#         recon_log = ISOReconciliationLog.objects.get(id=log_id, bank=bank)
-        
-#         filename = recon_log.filename
-#         recon_log.delete()
-        
-#         return Response({
-#             'message': f'Reconciliation "{filename}" deleted successfully'
-#         }, status=status.HTTP_200_OK)
-    
-#     except Bank.DoesNotExist:
-#         return Response({
-#             'message': 'Bank not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-#     except ISOReconciliationLog.DoesNotExist:
-#         return Response({
-#             'message': 'Reconciliation log not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-    
-
-
+ 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -572,38 +623,3 @@ def get_document_detail_api(request, document_id):
         return Response({
             'message': 'Document not found'
         }, status=status.HTTP_404_NOT_FOUND)
-
-
-# @api_view(['POST'])
-# @permission_classes([IsAuthenticated])
-# def delete_document_api(request, document_id):
-#     """
-#     DELETE /api/reconcile/documents/<document_id>/
-#     Delete document from cloud storage and database
-#     """
-#     try:
-#         bank = Bank.objects.get(user=request.user)
-#         document = ISODocument.objects.get(id=document_id, bank=bank)
-        
-#         # Delete from cloud storage first
-#         file_url = document.file_url
-#         file_name = document.file_name
-        
-#         # Delete cloud file
-#         delete_from_cloud_storage(file_url)
-        
-#         # Delete database record
-#         document.delete()
-        
-#         return Response({
-#             'message': f'Document "{file_name}" deleted successfully'
-#         }, status=status.HTTP_200_OK)
-    
-#     except Bank.DoesNotExist:
-#         return Response({
-#             'message': 'Bank not found'
-#         }, status=status.HTTP_404_NOT_FOUND)
-#     except ISODocument.DoesNotExist:
-#         return Response({
-#             'message': 'Document not found'
-#         }, status=status.HTTP_404_NOT_FOUND)

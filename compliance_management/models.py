@@ -5,46 +5,109 @@ from django.db import models
 from django.db import models
 from django.contrib.auth.models import User  # Use Django's built-in User
 
-# class Bank(models.Model):
-#     """Simple bank partner for sandbox testing"""
-#     name = models.CharField(max_length=200)
-#     contact_email = models.EmailField()
-#     api_key = models.CharField(max_length=255, unique=True)
-#     is_active = models.BooleanField(default=True)
-#     created_at = models.DateTimeField(auto_now_add=True)
-    
-#     def __str__(self):
-#         return self.name
+
+
+
+class ISOProfile(models.Model):
+    """
+    Defines how a bank uses ISO 20022
+    """
+    name = models.CharField(max_length=100)  # e.g. SWIFT_CBPR_PLUS
+    message_type = models.CharField(max_length=20)  # pacs.008, camt.053
+    version = models.CharField(max_length=10, default="001.08")
+    description = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False)  # ✅ ADD THIS
+
+
+    # Remittance rules
+    requires_structured_remittance = models.BooleanField(default=False)
+    allows_unstructured_remittance = models.BooleanField(default=True)
+    max_remittance_length = models.IntegerField(default=140)
+
+    # Validation strictness
+    strict_schema_validation = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.name} ({self.message_type})"
+
+#
+
 class Bank(models.Model):
-    """Bank partner for RandRail platform"""
+    """
+    Bank partner for RandRail platform
+    System-managed compliance entity
+    """
+
+    # Core identity
     name = models.CharField(max_length=200)
     contact_email = models.EmailField(unique=True)
+
+    # Auth / access
     api_key = models.CharField(max_length=64, unique=True, blank=True)
-    is_active = models.BooleanField(default=True)
+    # is_active = models.BooleanField(default=True)
+
+    # Platform linkage
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="bank"
+    )
+
+    # Compliance (system-controlled)
+    iso_profile = models.ForeignKey(
+        "ISOProfile",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="banks"
+    )
+
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
-    # Link to Django User for dashboard login
-    user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
-    
-    def __str__(self):
-        return self.name
-    
-    def save(self, *args, **kwargs):
-        # Auto-generate API key if not exists
-        if not self.api_key:
-            self.api_key = self.generate_api_key()
-        super().save(*args, **kwargs)
-    
-    @staticmethod
-    def generate_api_key():
-        """Generate unique API key"""
-        return f"rr_{secrets.token_urlsafe(32)}"
-    
+
     class Meta:
         verbose_name = "Bank"
         verbose_name_plural = "Banks"
-        ordering = ['-created_at']
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        """
+        System-enforced defaults:
+        - Generate API key
+        - Assign default ISO profile
+        """
+
+        # Generate API key once
+        if not self.api_key:
+            self.api_key = self.generate_api_key()
+
+        # Auto-assign default ISO profile (infra-owned)
+        if not self.iso_profile:
+            from .models import ISOProfile  # safe local import
+            self.iso_profile = (
+                ISOProfile.objects
+                .filter(is_default=True, is_active=True)
+                .order_by("id")
+                .first()
+            )
+
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_api_key():
+        """
+        Generate a secure, URL-safe API key
+        """
+        return f"rr_{secrets.token_urlsafe(32)}"
+
 
 class ISOReconciliationLog(models.Model):
     """Track ISO 20022 reconciliation attempts"""
@@ -57,6 +120,14 @@ class ISOReconciliationLog(models.Model):
     raw_xml = models.TextField(blank=True)  # Store for review
     result_json = models.JSONField(default=dict)  # Detailed results
     processing_time_ms = models.IntegerField(null=True, blank=True)  # Performance metric
+
+
+    iso_profile = models.ForeignKey(
+        ISOProfile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
     
     class Meta:
         ordering = ['-uploaded_at']
@@ -172,3 +243,18 @@ class AMLAlert(models.Model):
     
     def __str__(self):
         return f"{self.alert_level.upper()} - {self.transaction_id[:8]}... (Score: {self.risk_score})"
+
+
+class ISOFieldRule(models.Model):
+    iso_profile = models.ForeignKey(
+        ISOProfile,
+        on_delete=models.CASCADE,
+        related_name="field_rules"
+    )
+    field_path = models.CharField(max_length=255)
+    required = models.BooleanField(default=False)
+    max_length = models.IntegerField(null=True, blank=True)
+    regex = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.iso_profile.name} → {self.field_path}"
