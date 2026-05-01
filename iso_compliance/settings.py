@@ -253,8 +253,8 @@ CORS_ALLOW_CREDENTIALS = True
 # CORS Settings (for Next.js frontend)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-    "https:://iso-compliance-tool.onrender.com"
-    "https://iso-compliance-tool.vercel.app/",
+    "https://iso-compliance-tool.onrender.com",
+    "https://iso-compliance-tool.vercel.app",
 
         # Your Vercel domain
 ]
