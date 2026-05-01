@@ -285,11 +285,6 @@ class ISOFieldRule(models.Model):
         return f"{self.iso_profile.name} → {self.field_path} (weight={self.weight})"
 
 """
-STEP 1 of 4 — ADD TO models.py
-===============================
-Paste this at the bottom of compliance_management/models.py.
-It adds RoleName choices and the UserRole model.
-After pasting, run:
     python manage.py makemigrations compliance_management
     python manage.py migrate compliance_management
 """
