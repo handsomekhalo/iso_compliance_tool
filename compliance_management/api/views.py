@@ -1,5 +1,6 @@
 import json
 import random
+import re
 import time
 from django.utils import timezone # ⬅️ CORRECT
 from django.contrib.auth import authenticate
@@ -43,6 +44,12 @@ from rest_framework import (
 from compliance_management.models import Bank, ISODocument, ISOReconciliationLog
 from compliance_management.reconcilliation_util import delete_from_cloud_storage, format_reconciliation_result, generate_xrpl_hash, parse_iso20022_file, parse_iso20022_xml, upload_to_cloud_storage
 from compliance_management.views import login
+from compliance_management.models import UserRole, RoleName
+from compliance_management.decorators import (
+        IsActiveBank, IsAnalystOrAbove, IsAuditorOrAbove,
+        IsInstitutionAdmin, IsSuperAdmin, IsSameBankOrSuperAdmin
+    )
+from .serializers import UserRoleSerializer, InviteUserSerializer
 
 
 
@@ -50,21 +57,20 @@ from compliance_management.views import login
 from .serializers import BankDetailSerializer, BankLoginSerializer, BankRegistrationResponseSerializer, BankRegistrationSerializer, BankSerializer, GetISODocumentListSerializer, GetISOReconciliationStatsSerializer, ISODocumentSerializer, ISOReconciliationDetailSerializer, ISOReconciliationListSerializer, UploadFileOnlySerializer, UserModelSerializer
 
 
+
+
 @api_view(["POST"])
-@permission_classes((AllowAny,))
+@permission_classes([AllowAny])
 def login_api(request):
-    """ Login API for user authentication """
-
-    try:
-        body = json.loads(request.body)
-    except:
-        return Response(
-            {"status": "error", "message": "Invalid JSON"},
-            status=status.HTTP_400_BAD_REQUEST
-        )
-
-    email = body.get("email")
-    password = body.get("password")
+    """
+    Universal login for all user types.
+    Returns base auth fields for everyone, plus bank context if the user
+    is linked to a Bank, and role context if a UserRole exists.
+    """
+    email = request.data.get("email")
+    print('email', email)
+    password = request.data.get("password")
+    print('password', password)
 
     if not email or not password:
         return Response(
@@ -72,40 +78,135 @@ def login_api(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Authenticate by email (superuser allowed)
-    user = authenticate(username=email, password=password)
+    # Resolve username from email (handles cases where username != email)
+    try:
+        username = User.objects.get(email=email).username
+    except User.DoesNotExist:
+        return Response(
+            {"status": "error", "message": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    user = authenticate(request, username=username, password=password)
 
     if not user:
         return Response(
-            {"status": "error", "message": "Invalid Credentials"},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"status": "error", "message": "Invalid credentials"},
+            status=status.HTTP_401_UNAUTHORIZED,
         )
 
     if not user.is_active:
         return Response(
-            {"status": "error", "message": "User is inactive, please contact admin"},
-            status=status.HTTP_400_BAD_REQUEST,
+            {"status": "error", "message": "Account is inactive, please contact admin"},
+            status=status.HTTP_403_FORBIDDEN,
         )
 
     token, _ = Token.objects.get_or_create(user=user)
-
-    # Simple 5-digit OTP (temporary)
-    otp = "".join([str(random.randint(0, 9)) for _ in range(5)])
-
     user.last_login = datetime.now()
-    user.save()
+    user.save(update_fields=["last_login"])
 
-    user_serializer = UserModelSerializer(user)
+    # ── Base response (all users) ──────────────────────────────────────────
+    response_data = {
+        "status": "success",
+        "token": token.key,
+        "user": UserModelSerializer(user).data,
+    }
 
-    return Response(
-        {
-            "status": "success",
-            "token": token.key,
-            "otp": otp,
-            "user": user_serializer.data,
-        },
-        status=status.HTTP_200_OK,
-    )
+    # ── Role context (if UserRole exists) ─────────────────────────────────
+    try:
+        role = user.userrole
+        response_data["role"] = role.role
+        response_data["user_type"] = role.role
+    except (UserRole.DoesNotExist, AttributeError):
+        response_data["role"] = "superuser" if user.is_superuser else "unassigned"
+        response_data["user_type"] = response_data["role"]
+
+    # ── Bank context (if user is linked to a Bank) ────────────────────────
+    try:
+        bank = Bank.objects.select_related("iso_profile").get(user=user)
+
+        if not bank.is_active:
+            return Response(
+                {"status": "error", "message": "Bank account is inactive"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        response_data["bank"] = {
+            "id": bank.id,
+            "name": bank.name,
+            "api_key": bank.api_key,
+            "iso_profile": {
+                "id": bank.iso_profile.id if bank.iso_profile else None,
+                "name": bank.iso_profile.name if bank.iso_profile else None,
+                "message_type": bank.iso_profile.message_type if bank.iso_profile else None,
+            },
+        }
+    except Bank.DoesNotExist:
+        response_data["bank"] = None
+
+    return Response(response_data, status=status.HTTP_200_OK)
+# @api_view(["POST"])
+# @permission_classes((AllowAny,))
+# def login_api(request):
+#     """ Login API for user authentication """
+#     data =request.data
+#     print(f"Login API called with data: {data}")
+#     try:
+#         body = json.loads(request.body)
+#         print(f"Parsed JSON body: {body}")
+#     except:
+#         print("Failed to parse JSON body")
+#         return Response(
+#             {"status": "error", "message": "Invalid JSON"},
+#             status=status.HTTP_400_BAD_REQUEST
+#         )
+
+#     email = body.get("email")
+#     print(f"Email extracted: {email}")
+#     password = body.get("password")
+#     print(f"Password extracted: {password}")
+
+#     if not email or not password:
+#         print('no password or email')
+#         return Response(
+#             {"status": "error", "message": "Please provide both email and password"},
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     # Authenticate by email (superuser allowed)
+#     user = authenticate(username=email, password=password)
+
+#     if not user:
+#         return Response(
+#             {"status": "error", "message": "Invalid Credentials"},
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     if not user.is_active:
+#         return Response(
+#             {"status": "error", "message": "User is inactive, please contact admin"},
+#             status=status.HTTP_400_BAD_REQUEST,
+#         )
+
+#     token, _ = Token.objects.get_or_create(user=user)
+
+#     # Simple 5-digit OTP (temporary)
+#     otp = "".join([str(random.randint(0, 9)) for _ in range(5)])
+
+#     user.last_login = datetime.now()
+#     user.save()
+
+#     user_serializer = UserModelSerializer(user)
+
+#     return Response(
+#         {
+#             "status": "success",
+#             "token": token.key,
+#             "otp": otp,
+#             "user": user_serializer.data,
+#         },
+#         status=status.HTTP_200_OK,
+#     )
 
 
 
@@ -119,11 +220,16 @@ def register_bank_api(request):
     Register a new bank account
     """
 
-    print('inside API')
     serializer = BankRegistrationSerializer(data=request.data)
     
     if serializer.is_valid():
         bank = serializer.save()
+        
+        UserRole.objects.create(
+        user=bank.user,
+        role=RoleName.INSTITUTION_ADMIN,   # first user of a bank = admin
+        bank=bank
+    )
         
         # Create auth token for immediate login (optional)
         token, _ = Token.objects.get_or_create(user=bank.user)
@@ -145,16 +251,18 @@ def register_bank_api(request):
 
 # @api_view(['POST'])
 # @permission_classes([AllowAny])
-# def login_bank_api(request):
+# def login_api(request):
 #     """
 #     POST /api/auth/login/
 #     Login bank user and return token
 #     """
 #     serializer = BankLoginSerializer(data=request.data)
+    
 #     # bank = Bank.objects.select_related("iso_profile").get(user=user)
 
     
 #     if serializer.is_valid():
+#         print("Serializer valid, data:", serializer.validated_data)
 #         email = serializer.validated_data['email']
 #         password = serializer.validated_data['password']
         
@@ -210,50 +318,50 @@ def register_bank_api(request):
 #         'errors': serializer.errors
 #     }, status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def login_bank_api(request):
-    """
-    Bank login endpoint
-    """
-    serializer = BankLoginSerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
+# @api_view(["POST"])
+# @permission_classes([AllowAny])
+# def login_bank_api(request):
+#     """
+#     Bank login endpoint
+#     """
+#     serializer = BankLoginSerializer(data=request.data)
+#     serializer.is_valid(raise_exception=True)
 
-    email = serializer.validated_data["email"]
-    password = serializer.validated_data["password"]
+#     email = serializer.validated_data["email"]
+#     password = serializer.validated_data["password"]
 
-    # Authenticate user
-    user = authenticate(request, username=email, password=password)
+#     # Authenticate user
+#     user = authenticate(request, username=email, password=password)
 
-    if not user:
-        return Response(
-            {"detail": "Invalid credentials"},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+#     if not user:
+#         return Response(
+#             {"detail": "Invalid credentials"},
+#             status=status.HTTP_401_UNAUTHORIZED
+#         )
 
-    # Fetch bank WITH iso_profile
-    try:
-        bank = (
-            Bank.objects
-            .select_related("iso_profile")
-            .get(user=user)
-        )
-    except Bank.DoesNotExist:
-        return Response(
-            {"detail": "No active bank profile linked to this user"},
-            status=status.HTTP_403_FORBIDDEN
-        )
+#     # Fetch bank WITH iso_profile
+#     try:
+#         bank = (
+#             Bank.objects
+#             .select_related("iso_profile")
+#             .get(user=user)
+#         )
+#     except Bank.DoesNotExist:
+#         return Response(
+#             {"detail": "No active bank profile linked to this user"},
+#             status=status.HTTP_403_FORBIDDEN
+#         )
 
-    # Create or fetch token
-    token, _ = Token.objects.get_or_create(user=user)
+#     # Create or fetch token
+#     token, _ = Token.objects.get_or_create(user=user)
 
-    return Response(
-        {
-            "token": token.key,
-            "bank": BankSerializer(bank).data
-        },
-        status=status.HTTP_200_OK
-    )
+#     return Response(
+#         {
+#             "token": token.key,
+#             "bank": BankSerializer(bank).data
+#         },
+#         status=status.HTTP_200_OK
+#     )
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -281,7 +389,8 @@ def get_bank_details_api(request):
 # reconciliation/views.py
 
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank, IsAnalystOrAbove])
 def upload_reconciliation_api(request):
     """
     POST /api/reconcile/upload/
@@ -441,7 +550,8 @@ def upload_reconciliation_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank])
 def list_reconciliations_api(request):
     """
     GET /api/reconcile/list/
@@ -481,7 +591,8 @@ def list_reconciliations_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
+# @permission_classes([IsAuthenticated])
 def get_reconciliation_detail_api(request, log_id):
     """
     GET /api/reconcile/<log_id>/
@@ -509,7 +620,8 @@ def get_reconciliation_detail_api(request, log_id):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank])
+# @permission_classes([IsAuthenticated])
 def get_reconciliation_stats_api(request):
     """
     GET /api/reconcile/stats/
@@ -598,7 +710,8 @@ def list_documents_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+# @permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
 def get_document_detail_api(request, document_id):
     """
     GET /api/reconcile/documents/<document_id>/
@@ -623,3 +736,244 @@ def get_document_detail_api(request, document_id):
         return Response({
             'message': 'Document not found'
         }, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsActiveBank])
+def get_my_role_api(request):
+    """
+    GET /api/auth/my-role/
+    Returns the current user's role and permissions.
+    Any authenticated bank user can call this.
+   """
+    try:
+        role = request.user.role
+    except UserRole.DoesNotExist:
+        return Response(
+            {'message': 'No role assigned to this user. Contact your admin.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    return Response({
+        'message': 'Role retrieved successfully',
+        'data': {
+            'role': role.role,
+            'bank': role.bank.name if role.bank else None,
+            'permissions': {
+                'can_upload':       role.can_upload(),
+                'can_export':       role.can_export(),
+                'can_manage_rules': role.can_manage_rules(),
+                'can_manage_users': role.can_manage_users(),
+            }
+        }
+    }, status=status.HTTP_200_OK)
+
+
+# @api_view(['GET'])
+# @permission_classes([IsAuthenticated, IsInstitutionAdmin])
+# def list_bank_users_api(request):
+#     """
+#     GET /api/users/
+#     List all users in the requesting admin's bank.
+#     Institution Admin and Super Admin only.
+#     """
+#     try:
+#         bank = request.user.bank
+#     except Exception:
+#         return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
+
+#     roles = UserRole.objects.filter(bank=bank).select_related('user')
+#     serializer = UserRoleSerializer(roles, many=True)
+#     return Response({
+#         'message': 'Users retrieved successfully',
+#         'data': serializer.data
+#     }, status=status.HTTP_200_OK)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def list_bank_users_api(request):
+    """
+    GET /api/users/?include_inactive=true
+    List all users in the requesting admin's bank.
+    Filters out inactive users by default.
+    """
+    try:
+        bank = request.user.bank
+    except Exception:
+        return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    include_inactive = request.query_params.get('include_inactive', 'false').lower() == 'true'
+
+    roles = UserRole.objects.filter(bank=bank).select_related('user')
+
+    if not include_inactive:
+        roles = roles.filter(user__is_active=True)
+
+    serializer = UserRoleSerializer(roles, many=True)
+    return Response({
+        'message': 'Users retrieved successfully',
+        'data': serializer.data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def invite_user_api(request):
+    """
+    POST /api/users/invite/
+    Create a new user and assign them a role within the admin's bank.
+    Institution Admin and Super Admin only.
+
+    Body: { email, password, role }
+    """
+    serializer = InviteUserSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(
+            {'message': 'Invalid data', 'errors': serializer.errors},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    email = serializer.validated_data['email']
+    password = serializer.validated_data['password']
+    role_name = serializer.validated_data['role']
+
+    # Super admin can't be assigned via invite
+    if role_name == RoleName.SUPER_ADMIN:
+        return Response(
+            {'message': 'Super Admin role cannot be assigned via invite.'},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    if User.objects.filter(email=email).exists():
+        return Response(
+            {'message': 'A user with this email already exists.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        bank = request.user.bank
+    except Exception:
+        return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Create user
+    new_user = User.objects.create_user(
+        username=email,
+        email=email,
+        password=password
+    )
+
+    # Assign role scoped to this bank
+    user_role = UserRole.objects.create(
+        user=new_user,
+        role=role_name,
+        bank=bank
+    )
+
+    return Response({
+        'message': f'User {email} invited as {role_name}.',
+        'data': UserRoleSerializer(user_role).data
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def update_user_role_api(request, user_id):
+    """
+    PATCH /api/users/<user_id>/role/
+    Change the role of a user within the admin's bank.
+    Institution Admin and Super Admin only.
+
+    Body: { role }
+    """
+    new_role = request.data.get('role')
+    valid_roles = ['analyst', 'auditor', 'institution_admin']
+
+    if new_role not in valid_roles:
+        return Response(
+            {'message': f'Invalid role. Choose from: {valid_roles}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        bank = request.user.bank
+        user_role = UserRole.objects.get(user__id=user_id, bank=bank)
+    except UserRole.DoesNotExist:
+        return Response(
+            {'message': 'User not found in your bank.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    user_role.role = new_role
+    user_role.save()
+
+    return Response({
+        'message': f'Role updated to {new_role}.',
+        'data': UserRoleSerializer(user_role).data
+    }, status=status.HTTP_200_OK)
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def remove_user_api(request, user_id):
+    """
+    DELETE /api/users/<user_id>/
+    Deactivates a user. Cannot remove yourself.
+    """
+    if request.user.id == user_id:
+        return Response(
+            {'message': 'You cannot remove yourself.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        bank = request.user.bank
+        user_role = UserRole.objects.get(user__id=user_id, bank=bank)
+    except UserRole.DoesNotExist:
+        return Response(
+            {'message': 'User not found in your bank.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    user_role.user.is_active = False
+    user_role.user.save(update_fields=['is_active'])
+
+    return Response(
+        {'message': 'User deactivated successfully.'},
+        status=status.HTTP_200_OK
+    )
+
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def activate_user_api(request, user_id):
+    """
+    PATCH /api/users/<user_id>/activate/
+    Reactivates a previously deactivated user.
+    """
+    if request.user.id == user_id:
+        return Response(
+            {'message': 'You cannot modify your own status.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    try:
+        bank = request.user.bank
+        user_role = UserRole.objects.get(user__id=user_id, bank=bank)
+    except UserRole.DoesNotExist:
+        return Response(
+            {'message': 'User not found in your bank.'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    if user_role.user.is_active:
+        return Response(
+            {'message': 'User is already active.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user_role.user.is_active = True
+    user_role.user.save(update_fields=['is_active'])
+
+    return Response(
+        {'message': 'User activated successfully.'},
+        status=status.HTTP_200_OK
+    )
