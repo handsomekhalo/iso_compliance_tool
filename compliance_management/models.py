@@ -379,3 +379,8 @@ class UserRole(models.Model):
             RoleName.INSTITUTION_ADMIN,
             RoleName.SUPER_ADMIN,
         ]
+
+
+
+
+

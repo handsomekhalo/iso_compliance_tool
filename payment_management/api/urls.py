@@ -1,7 +1,7 @@
 from django.urls import path
 
 from compliance_management.export_view import export_reconciliation_api
-from . import views
+from compliance_management.api import views
 from compliance_management.api.views import iso_field_rule_detail_api, iso_field_rules_api, list_reconciliations_api
 
 

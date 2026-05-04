@@ -35,6 +35,11 @@ urlpatterns = [
     path('', views.login_view, name='login_view'),
     path('compliance_management/',include('compliance_management.urls')),
     path('compliance_management_api/',include('compliance_management.api.urls')),
+    path('payment_management/',include('payment_management.urls')),
+    path('payment_management_api/',include('payment_management.api.urls')),
+
+
+    
 
 
 

@@ -1117,3 +1117,24 @@ def iso_field_rule_detail_api(request, profile_id, rule_id):
     # ── DELETE ─────────────────────────────────────────────────────────────
     rule.delete()
     return Response({'message': 'Rule deleted successfully.'}, status=status.HTTP_200_OK)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout_api(request):
+    """
+    POST /api/auth/logout/
+    Invalidates the user's auth token.
+    """
+    try:
+        request.user.auth_token.delete()
+        return Response(
+            {'message': 'Logged out successfully.'},
+            status=status.HTTP_200_OK
+        )
+    except Token.DoesNotExist:
+        return Response(
+            {'message': 'No active session found.'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
