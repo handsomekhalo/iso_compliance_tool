@@ -41,7 +41,7 @@ from rest_framework import (
 #     permission_classes
 # )
 
-from compliance_management.models import Bank, ISODocument, ISOReconciliationLog
+from compliance_management.models import Bank, ISODocument, ISOFieldRule, ISOProfile, ISOReconciliationLog
 from compliance_management.reconcilliation_util import delete_from_cloud_storage, format_reconciliation_result, generate_xrpl_hash, parse_iso20022_file, parse_iso20022_xml, upload_to_cloud_storage
 from compliance_management.views import login
 from compliance_management.models import UserRole, RoleName
@@ -49,7 +49,7 @@ from compliance_management.decorators import (
         IsActiveBank, IsAnalystOrAbove, IsAuditorOrAbove,
         IsInstitutionAdmin, IsSuperAdmin, IsSameBankOrSuperAdmin
     )
-from .serializers import UserRoleSerializer, InviteUserSerializer
+from .serializers import GetISOFieldRuleSerializer, ISOFieldRuleSerializer, UserRoleSerializer, InviteUserSerializer
 
 
 
@@ -464,11 +464,18 @@ def upload_reconciliation_api(request):
         xrpl_hash = generate_xrpl_hash(xml_content)
         
         # Format results
-        result_json = format_reconciliation_result(
-            total_transactions,
-            mismatches_count,
-            mismatch_details
-        )
+        # result_json = format_reconciliation_result(
+        #     total_transactions,
+        #     mismatches_count,
+        #     mismatch_details
+        # )
+        parsed_data = {
+            'transactions': mismatch_details if isinstance(mismatch_details, list) else [],
+            'total_transactions': total_transactions,
+            'mismatches_count': mismatches_count,
+        }
+        result_json = format_reconciliation_result(parsed_data, iso_profile=iso_profile)
+                
         
         # Calculate processing time
         processing_time = int((time.time() - start_time) * 1000)
@@ -977,3 +984,136 @@ def activate_user_api(request, user_id):
         {'message': 'User activated successfully.'},
         status=status.HTTP_200_OK
     )
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FILE 1: Add these views to compliance_management/api/views.py
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def iso_field_rules_api(request, profile_id):
+    """
+    GET  /api/profiles/<profile_id>/rules/        — list all rules for a profile
+    POST /api/profiles/<profile_id>/rules/        — create a new rule
+    """
+    try:
+        profile = ISOProfile.objects.get(pk=profile_id)
+        print(f"Profile found: {profile.name}")
+    except ISOProfile.DoesNotExist:
+        return Response({'message': 'Profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Bank scoping — non-superadmins can only touch their own bank's profiles
+    try:
+        role = request.user.userrole
+        is_super = role.role == 'super_admin'
+    except (UserRole.DoesNotExist, AttributeError):
+        is_super = request.user.is_superuser
+
+    # if not is_super:
+    #     try:
+    #         bank = request.user.bank
+    #         if profile.bank and profile.bank != bank:
+    #             return Response({'message': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    #     except Exception:
+    #         return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # ── GET ────────────────────────────────────────────────────────────────
+    if request.method == 'GET':
+        rules = ISOFieldRule.objects.filter(iso_profile=profile).order_by('field_path')
+        serializer = GetISOFieldRuleSerializer(rules, many=True)
+        return Response({
+            'message': 'Rules retrieved successfully.',
+            'profile': {
+                'id': profile.id,
+                'name': profile.name,
+                'message_type': profile.message_type,
+            },
+            'total_weight': sum(r.weight for r in rules if r.weight),
+            'data': serializer.data,
+        }, status=status.HTTP_200_OK)
+
+    # ── POST ───────────────────────────────────────────────────────────────
+    serializer = ISOFieldRuleSerializer(data=request.data)
+    if serializer.is_valid():
+        # Prevent duplicate field_path within the same profile
+        field_path = serializer.validated_data.get('field_path')
+        if ISOFieldRule.objects.filter(iso_profile=profile, field_path=field_path).exists():
+            return Response(
+                {'message': f'A rule for field "{field_path}" already exists in this profile.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        rule = serializer.save(iso_profile=profile)
+        return Response({
+            'message': 'Rule created successfully.',
+            'data': ISOFieldRuleSerializer(rule).data,
+        }, status=status.HTTP_201_CREATED)
+
+    return Response({'message': 'Invalid data.', 'errors': serializer.errors},
+                    status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET', 'PATCH', 'DELETE'])
+@permission_classes([IsAuthenticated, IsInstitutionAdmin])
+def iso_field_rule_detail_api(request, profile_id, rule_id):
+    """
+    GET    /api/profiles/<profile_id>/rules/<rule_id>/   — retrieve single rule
+    PATCH  /api/profiles/<profile_id>/rules/<rule_id>/   — update rule
+    DELETE /api/profiles/<profile_id>/rules/<rule_id>/   — delete rule
+    """
+    try:
+        profile = ISOProfile.objects.get(pk=profile_id)
+        rule = ISOFieldRule.objects.get(pk=rule_id, iso_profile=profile)
+    except ISOProfile.DoesNotExist:
+        return Response({'message': 'Profile not found.'}, status=status.HTTP_404_NOT_FOUND)
+    except ISOFieldRule.DoesNotExist:
+        return Response({'message': 'Rule not found in this profile.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # Bank scoping
+    try:
+        role = request.user.userrole
+        is_super = role.role == 'super_admin'
+    except (UserRole.DoesNotExist, AttributeError):
+        is_super = request.user.is_superuser
+
+    # if not is_super:
+    #     try:
+    #         bank = request.user.bank
+    #         if profile.bank and profile.bank != bank:
+    #             return Response({'message': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
+    #     except Exception:
+    #         return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    # ── GET ────────────────────────────────────────────────────────────────
+    if request.method == 'GET':
+        return Response({
+            'message': 'Rule retrieved successfully.',
+            'data': ISOFieldRuleSerializer(rule).data,
+        }, status=status.HTTP_200_OK)
+
+    # ── PATCH ──────────────────────────────────────────────────────────────
+    if request.method == 'PATCH':
+        serializer = ISOFieldRuleSerializer(rule, data=request.data, partial=True)
+        if serializer.is_valid():
+            # If field_name is being changed, check for duplicates
+            new_field_name = serializer.validated_data.get('field_name')
+            if new_field_name and new_field_name != rule.field_name:
+                if ISOFieldRule.objects.filter(
+                    iso_profile=profile, field_name=new_field_name
+                ).exclude(pk=rule_id).exists():
+                    return Response(
+                        {'message': f'A rule for field "{new_field_name}" already exists.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+            updated_rule = serializer.save()
+            return Response({
+                'message': 'Rule updated successfully.',
+                'data': ISOFieldRuleSerializer(updated_rule).data,
+            }, status=status.HTTP_200_OK)
+        return Response({'message': 'Invalid data.', 'errors': serializer.errors},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # ── DELETE ─────────────────────────────────────────────────────────────
+    rule.delete()
+    return Response({'message': 'Rule deleted successfully.'}, status=status.HTTP_200_OK)

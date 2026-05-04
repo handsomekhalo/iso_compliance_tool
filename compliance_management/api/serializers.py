@@ -34,11 +34,22 @@ class ISOProfileSerializer(serializers.ModelSerializer):
 # ISOFieldRule — needed for dynamic scoring CRUD endpoint
 # ---------------------------------------------------------------------------
 
+# class ISOFieldRuleSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ISOFieldRule
+#         fields = ["id", "field_path", "required", "max_length", "regex", "weight"]
 class ISOFieldRuleSerializer(serializers.ModelSerializer):
     class Meta:
         model = ISOFieldRule
-        fields = ["id", "field_path", "required", "max_length", "regex", "weight"]
+        fields = ['id', 'field_path', 'required', 'weight', 'max_length', 'regex']
+        read_only_fields = ['id']
 
+
+class GetISOFieldRuleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ISOFieldRule
+        fields = ['id', 'field_path', 'required', 'weight']
+        read_only_fields = ['id']
 
 # ---------------------------------------------------------------------------
 # Bank registration / login / detail
@@ -251,22 +262,73 @@ class ISOReconciliationListSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         """
-        FIX: thresholds should come from ISOProfile config eventually,
-        but for now they are readable constants, not magic numbers scattered
-        across the codebase.
-        """
-        PERFECT = 0
-        GOOD_MAX = 5
-        WARNING_MAX = 20
+        Derive status from result_json.summary.average_score.
 
-        if obj.mismatches == PERFECT:
-            return 'perfect'
-        elif obj.mismatches <= GOOD_MAX:
-            return 'good'
-        elif obj.mismatches <= WARNING_MAX:
-            return 'warning'
+        Thresholds are based on the profile's total possible weight,
+        falling back to percentage bands if no profile is attached.
+
+        Bands:
+            >= 80%  → compliant
+            >= 50%  → partial
+            < 50%   → non_compliant
+            no data → pending
+        """
+        import json as _json
+
+        result = obj.result_json
+        if not result:
+            return 'pending'
+
+        if isinstance(result, str):
+            try:
+                result = _json.loads(result)
+            except Exception:
+                return 'pending'
+
+        # Try to get pre-computed average score from summary block
+        summary = result.get('summary', {})
+        avg_score = summary.get('average_score')
+
+        # Fall back to counting issues list if no summary
+        if avg_score is None:
+            issues = result.get('issues', [])
+            issue_count = len(issues) if isinstance(issues, list) else 0
+            # Legacy hardcoded fallback — only used if old result_json shape
+            if issue_count == 0:
+                return 'compliant'
+            elif issue_count <= 5:
+                return 'partial'
+            else:
+                return 'non_compliant'
+
+        # Score-based thresholds (percentage bands — profile-agnostic)
+        if avg_score >= 80:
+            return 'compliant'
+        elif avg_score >= 50:
+            return 'partial'
         else:
-            return 'critical'
+            return 'non_compliant'
+
+
+
+    # def get_status(self, obj):
+    #     """
+    #     FIX: thresholds should come from ISOProfile config eventually,
+    #     but for now they are readable constants, not magic numbers scattered
+    #     across the codebase.
+    #     """
+    #     PERFECT = 0
+    #     GOOD_MAX = 5
+    #     WARNING_MAX = 20
+
+    #     if obj.mismatches == PERFECT:
+    #         return 'perfect'
+    #     elif obj.mismatches <= GOOD_MAX:
+    #         return 'good'
+    #     elif obj.mismatches <= WARNING_MAX:
+    #         return 'warning'
+    #     else:
+    #         return 'critical'
 
 
 class ISOReconciliationDetailSerializer(serializers.ModelSerializer):
