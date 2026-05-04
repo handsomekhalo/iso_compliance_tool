@@ -1,5 +1,6 @@
 import logging
 
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -109,12 +110,20 @@ def payment_webhook_api(request):
     """
     # ── Verify webhook signature ───────────────────────────────────────────
     signature = request.headers.get('X-RandRail-Signature', '')
-    if not verify_webhook_signature(request.body, signature):
-        logger.warning("[payment_webhook_api] Invalid webhook signature rejected.")
-        return Response(
-            {'message': 'Invalid signature.'},
-            status=status.HTTP_401_UNAUTHORIZED
-        )
+    # REMOVE BEFORE PRODUCTION
+    if getattr(settings, 'LIGHTNING_MOCK_MODE', True):
+        pass  # skip signature check in mock mode
+    else:
+        if not verify_webhook_signature(request.body, signature):
+            return Response({'message': 'Invalid signature.'}, status=401)
+
+    
+    # if not verify_webhook_signature(request.body, signature):
+    #     logger.warning("[payment_webhook_api] Invalid webhook signature rejected.")
+    #     return Response(
+    #         {'message': 'Invalid signature.'},
+    #         status=status.HTTP_401_UNAUTHORIZED
+    #     )
 
     serializer = WebhookPayloadSerializer(data=request.data)
     if not serializer.is_valid():

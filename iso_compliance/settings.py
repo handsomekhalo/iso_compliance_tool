@@ -325,3 +325,12 @@ BACK_BLAZE_APLLICATION_KEY =config('BACK_BLAZE_APLLICATION_KEY')
 BACK_BLAZE_APLLICATION_KEY =config('BACK_BLAZE_APLLICATION_KEY')
 
 BACK_BLAZE_APLLICATION_KEY =config('BACK_BLAZE_APLLICATION_KEY')
+
+
+#  Lightning Network config
+LIGHTNING_MOCK_MODE = True          # ← True for sandbox/dev, False for live
+LND_REST_HOST       = ''            # e.g. https://your-node.voltageapp.io:8080
+LND_MACAROON_HEX    = ''            # admin macaroon hex from your LND node
+MONEYBADGER_API_KEY = ''            # from MoneyBadger dashboard
+MONEYBADGER_API_URL = 'https://api.moneybadger.io/v1'
+LIGHTNING_WEBHOOK_SECRET = ''       # shared secret — generate with: secrets.token_hex(32)

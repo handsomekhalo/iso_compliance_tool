@@ -443,6 +443,8 @@ def upload_reconciliation_api(request):
         
         # Parse and validate based on file type
         file_extension = uploaded_file.name.lower().split('.')[-1]
+
+
         
         if file_extension == 'xml':
             # total_transactions, mismatches_count, mismatch_details = parse_iso20022_xml(xml_content)
@@ -457,7 +459,8 @@ def upload_reconciliation_api(request):
                 xml_bytes,
                 uploaded_file.name
             )
-        
+        print(f"[DEBUG] mismatch_details sample: {mismatch_details[:1]}")
+
         print(f"[DEBUG] Parsed: {total_transactions} transactions, {mismatches_count} mismatches")
         
         # Generate XRPL hash for audit trail
@@ -474,6 +477,8 @@ def upload_reconciliation_api(request):
             'total_transactions': total_transactions,
             'mismatches_count': mismatches_count,
         }
+
+        
         result_json = format_reconciliation_result(parsed_data, iso_profile=iso_profile)
                 
         

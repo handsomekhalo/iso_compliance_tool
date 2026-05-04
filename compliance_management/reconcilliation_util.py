@@ -458,42 +458,86 @@ def format_reconciliation_result(parsed_data, iso_profile=None):
         txn_score = 0
         rules_applied = []
 
-        for rule in rules_list:
-            # field = rule['field_name']
-            field = rule['field_path']
+        # ── Normalise parser output shape ──────────────────────────────────
+        # Parser returns violations as a list of failed field paths.
+        # Convert to a set for O(1) lookup.
+        violations = set(txn.get('violations', []))
 
+        for rule in rules_list:
+            field = rule['field_path']
             weight = rule.get('weight') or 0
-            is_required = rule.get('is_required', False)
-            field_value = txn.get(field)
+            is_required = rule.get('required', False)
+
+            # Field passed if it's NOT in the violations list
+            passed = field not in violations
 
             rule_result = {
-                'field': field,
-                'weight': weight,
+                'field':    field,
+                'weight':   weight,
                 'required': is_required,
-                'present': field_value not in (None, '', 'MISSING'),
-                'passed': False,
+                'passed':   passed,
             }
 
-            if field_value and field_value != 'MISSING':
-                rule_result['passed'] = True
+            if passed:
                 txn_score += weight
             else:
                 if is_required:
-                    issue = f"Required field '{field}' is missing or empty"
+                    issue = f"Required field '{field}' failed validation"
                     txn_issues.append(issue)
-                    overall_issues.append(issue)
 
             rules_applied.append(rule_result)
 
-        # Normalise score to 100
         normalised_score = round((txn_score / total_possible_weight) * 100) if total_possible_weight else 0
 
         scored_transactions.append({
-            **txn,
-            'compliance_score': normalised_score,
-            'issues': txn_issues,
-            'rules_applied': rules_applied,
+            'transaction_index': txn.get('transaction_index'),
+            'compliance_score':  normalised_score,
+            'issues':            txn_issues,
+            'rules_applied':     rules_applied,
+            'original_issue':    txn.get('issue', ''),
         })
+
+    # for txn in transactions:
+    #     txn_issues = []
+    #     txn_score = 0
+    #     rules_applied = []
+
+    #     for rule in rules_list:
+    #         # field = rule['field_name']
+    #         field = rule['field_path']
+
+    #         weight = rule.get('weight') or 0
+    #         is_required = rule.get('is_required', False)
+    #         field_value = txn.get(field)
+
+    #         rule_result = {
+    #             'field': field,
+    #             'weight': weight,
+    #             'required': is_required,
+    #             'present': field_value not in (None, '', 'MISSING'),
+    #             'passed': False,
+    #         }
+
+    #         if field_value and field_value != 'MISSING':
+    #             rule_result['passed'] = True
+    #             txn_score += weight
+    #         else:
+    #             if is_required:
+    #                 issue = f"Required field '{field}' is missing or empty"
+    #                 txn_issues.append(issue)
+    #                 overall_issues.append(issue)
+
+    #         rules_applied.append(rule_result)
+
+    #     # Normalise score to 100
+    #     normalised_score = round((txn_score / total_possible_weight) * 100) if total_possible_weight else 0
+
+    #     scored_transactions.append({
+    #         **txn,
+    #         'compliance_score': normalised_score,
+    #         'issues': txn_issues,
+    #         'rules_applied': rules_applied,
+    #     })
 
     # ── Summary ────────────────────────────────────────────────────────────
     scores = [t['compliance_score'] for t in scored_transactions]
