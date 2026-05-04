@@ -380,7 +380,3 @@ class UserRole(models.Model):
             RoleName.SUPER_ADMIN,
         ]
 
-
-
-
-

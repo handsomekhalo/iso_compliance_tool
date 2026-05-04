@@ -1,5 +1,8 @@
 from django.db import models
 
+from compliance_management.models import Bank
+from django.contrib.auth.models import User
+
 # Create your models here.
 class LightningPayment(models.Model):
     """
@@ -45,6 +48,7 @@ class LightningPayment(models.Model):
     xrpl_hash        = models.CharField(max_length=255, blank=True)  # audit fingerprint same as reconciliation
     failure_reason   = models.TextField(blank=True)
     raw_response     = models.JSONField(null=True, blank=True)        # full LND/MoneyBadger response stored for audit
+
 
     # ── Timestamps ────────────────────────────────────────────────────────
     created_at   = models.DateTimeField(auto_now_add=True)
