@@ -68,9 +68,7 @@ def login_api(request):
     is linked to a Bank, and role context if a UserRole exists.
     """
     email = request.data.get("email")
-    print('email', email)
     password = request.data.get("password")
-    print('password', password)
 
     if not email or not password:
         return Response(
@@ -145,68 +143,6 @@ def login_api(request):
         response_data["bank"] = None
 
     return Response(response_data, status=status.HTTP_200_OK)
-# @api_view(["POST"])
-# @permission_classes((AllowAny,))
-# def login_api(request):
-#     """ Login API for user authentication """
-#     data =request.data
-#     print(f"Login API called with data: {data}")
-#     try:
-#         body = json.loads(request.body)
-#         print(f"Parsed JSON body: {body}")
-#     except:
-#         print("Failed to parse JSON body")
-#         return Response(
-#             {"status": "error", "message": "Invalid JSON"},
-#             status=status.HTTP_400_BAD_REQUEST
-#         )
-
-#     email = body.get("email")
-#     print(f"Email extracted: {email}")
-#     password = body.get("password")
-#     print(f"Password extracted: {password}")
-
-#     if not email or not password:
-#         print('no password or email')
-#         return Response(
-#             {"status": "error", "message": "Please provide both email and password"},
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     # Authenticate by email (superuser allowed)
-#     user = authenticate(username=email, password=password)
-
-#     if not user:
-#         return Response(
-#             {"status": "error", "message": "Invalid Credentials"},
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     if not user.is_active:
-#         return Response(
-#             {"status": "error", "message": "User is inactive, please contact admin"},
-#             status=status.HTTP_400_BAD_REQUEST,
-#         )
-
-#     token, _ = Token.objects.get_or_create(user=user)
-
-#     # Simple 5-digit OTP (temporary)
-#     otp = "".join([str(random.randint(0, 9)) for _ in range(5)])
-
-#     user.last_login = datetime.now()
-#     user.save()
-
-#     user_serializer = UserModelSerializer(user)
-
-#     return Response(
-#         {
-#             "status": "success",
-#             "token": token.key,
-#             "otp": otp,
-#             "user": user_serializer.data,
-#         },
-#         status=status.HTTP_200_OK,
-#     )
 
 
 
@@ -249,119 +185,6 @@ def register_bank_api(request):
     }, status=status.HTTP_400_BAD_REQUEST)
 
 
-# @api_view(['POST'])
-# @permission_classes([AllowAny])
-# def login_api(request):
-#     """
-#     POST /api/auth/login/
-#     Login bank user and return token
-#     """
-#     serializer = BankLoginSerializer(data=request.data)
-    
-#     # bank = Bank.objects.select_related("iso_profile").get(user=user)
-
-    
-#     if serializer.is_valid():
-#         print("Serializer valid, data:", serializer.validated_data)
-#         email = serializer.validated_data['email']
-#         password = serializer.validated_data['password']
-        
-#         # Authenticate user (using email as username)
-#         try:
-#             user = User.objects.get(email=email)
-#             # user = authenticate(username=user.username, password=password)
-#             user = authenticate(request, username=user.username, password=password)
-#         except User.DoesNotExist:
-#             user = None
-        
-#         if user is not None:
-#             # Get associated bank
-#             try:
-#                 bank = Bank.objects.get(user=user)
-                
-#                 if not bank.is_active:
-#                     return Response({
-#                         'message': 'Bank account is inactive'
-#                     }, status=status.HTTP_403_FORBIDDEN)
-                
-#                 # Create or get token
-#                 token, _ = Token.objects.get_or_create(user=user)
-                
-#                 # Login user (for session-based auth if needed)
-#                 # login(request, user)
-                
-#                 return Response({
-#                     'message': 'Login successful',
-#                     'token': token.key,
-#                     'bank_id': bank.id,
-#                     'bank_name': bank.name,
-#                     'api_key': bank.api_key,
-#                       'iso_profile': {
-#                         'id': bank.iso_profile.id if bank.iso_profile else None,
-#                         'name': bank.iso_profile.name if bank.iso_profile else None,
-#                         'message_type': bank.iso_profile.message_type if bank.iso_profile else None
-#                     }
-
-#                 }, status=status.HTTP_200_OK)
-                
-#             except Bank.DoesNotExist:
-#                 return Response({
-#                     'message': 'Bank account not found'
-#                 }, status=status.HTTP_404_NOT_FOUND)
-#         else:
-#             return Response({
-#                 'message': 'Invalid email or password'
-#             }, status=status.HTTP_401_UNAUTHORIZED)
-    
-#     return Response({
-#         'message': 'Invalid input',
-#         'errors': serializer.errors
-#     }, status=status.HTTP_400_BAD_REQUEST)
-
-# @api_view(["POST"])
-# @permission_classes([AllowAny])
-# def login_bank_api(request):
-#     """
-#     Bank login endpoint
-#     """
-#     serializer = BankLoginSerializer(data=request.data)
-#     serializer.is_valid(raise_exception=True)
-
-#     email = serializer.validated_data["email"]
-#     password = serializer.validated_data["password"]
-
-#     # Authenticate user
-#     user = authenticate(request, username=email, password=password)
-
-#     if not user:
-#         return Response(
-#             {"detail": "Invalid credentials"},
-#             status=status.HTTP_401_UNAUTHORIZED
-#         )
-
-#     # Fetch bank WITH iso_profile
-#     try:
-#         bank = (
-#             Bank.objects
-#             .select_related("iso_profile")
-#             .get(user=user)
-#         )
-#     except Bank.DoesNotExist:
-#         return Response(
-#             {"detail": "No active bank profile linked to this user"},
-#             status=status.HTTP_403_FORBIDDEN
-#         )
-
-#     # Create or fetch token
-#     token, _ = Token.objects.get_or_create(user=user)
-
-#     return Response(
-#         {
-#             "token": token.key,
-#             "bank": BankSerializer(bank).data
-#         },
-#         status=status.HTTP_200_OK
-#     )
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -398,15 +221,12 @@ def upload_reconciliation_api(request):
     """
     data=request.data
 
-    print(f"Request data: {data}")
 
 
     serializer = UploadFileOnlySerializer(data=request.data)
-    print(data, "uplaoding")
     # serializer = UploadFileOnlySerializer(data=request.data,files=request.FILES)
     
     if not serializer.is_valid():
-        print("serializer not")
         return Response({
             'message': 'Invalid file upload',
             'errors': serializer.errors
@@ -436,11 +256,7 @@ def upload_reconciliation_api(request):
         # Read XML content
         xml_content = uploaded_file.read().decode('utf-8')
         xml_bytes = xml_content.encode('utf-8')
-        
-        # DEBUG: Print first 500 chars for troubleshooting
-        print(f"[DEBUG] Parsing file: {uploaded_file.name}")
-        print(f"[DEBUG] First 500 chars:\n{xml_content[:500]}")
-        
+
         # Parse and validate based on file type
         file_extension = uploaded_file.name.lower().split('.')[-1]
 
@@ -459,27 +275,43 @@ def upload_reconciliation_api(request):
                 xml_bytes,
                 uploaded_file.name
             )
-        print(f"[DEBUG] mismatch_details sample: {mismatch_details[:1]}")
 
-        print(f"[DEBUG] Parsed: {total_transactions} transactions, {mismatches_count} mismatches")
-        
         # Generate XRPL hash for audit trail
         xrpl_hash = generate_xrpl_hash(xml_content)
-        
+
+
+        # Build a full transaction list — all transactions, not just mismatches
+        all_transactions = []
+        for i in range(1, total_transactions + 1):
+            # Find mismatch for this index if exists
+            mismatch = next((m for m in mismatch_details if m.get('transaction_index') == i), None)
+            all_transactions.append(mismatch if mismatch else {
+                'transaction_index': i,
+                'issue': '',
+                'violations': []  # no violations = passes all rules
+            })
+
+        parsed_data = {
+            'transactions': all_transactions,
+            'total_transactions': total_transactions,
+            'mismatches_count': mismatches_count,
+        }
+        result_json = format_reconciliation_result(parsed_data, iso_profile=iso_profile)
+                
         # Format results
         # result_json = format_reconciliation_result(
         #     total_transactions,
         #     mismatches_count,
         #     mismatch_details
         # )
-        parsed_data = {
-            'transactions': mismatch_details if isinstance(mismatch_details, list) else [],
-            'total_transactions': total_transactions,
-            'mismatches_count': mismatches_count,
-        }
+        # parsed_data = {
+        #     'transactions': mismatch_details if isinstance(mismatch_details, list) else [],
+        #     'total_transactions': total_transactions,
+        #     'mismatches_count': mismatches_count,
+        # }
 
         
-        result_json = format_reconciliation_result(parsed_data, iso_profile=iso_profile)
+        # result_json = format_reconciliation_result(parsed_data, iso_profile=iso_profile)
                 
         
         # Calculate processing time

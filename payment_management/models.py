@@ -39,15 +39,15 @@ class LightningPayment(models.Model):
     payment_preimage = models.CharField(max_length=255, blank=True)  # proof of payment
 
     # ── Off-ramp fields (MoneyBadger/VALR) ────────────────────────────────
-    offramp_provider     = models.CharField(max_length=50, blank=True)   # 'moneybadger' | 'valr'
-    offramp_reference    = models.CharField(max_length=255, blank=True)  # provider's reference ID
-    offramp_status       = models.CharField(max_length=50, blank=True)   # provider's own status string
-    recipient_account    = models.CharField(max_length=255, blank=True)  # destination (phone, account no, lightning address)
+    offramp_provider     = models.CharField(max_length=50, blank=True)  
+    offramp_reference    = models.CharField(max_length=255, blank=True)  
+    offramp_status       = models.CharField(max_length=50, blank=True)   
+    recipient_account    = models.CharField(max_length=255, blank=True)  
 
     # ── Audit fields ───────────────────────────────────────────────────────
-    xrpl_hash        = models.CharField(max_length=255, blank=True)  # audit fingerprint same as reconciliation
+    xrpl_hash        = models.CharField(max_length=255, blank=True) 
     failure_reason   = models.TextField(blank=True)
-    raw_response     = models.JSONField(null=True, blank=True)        # full LND/MoneyBadger response stored for audit
+    raw_response     = models.JSONField(null=True, blank=True)        
 
 
     # ── Timestamps ────────────────────────────────────────────────────────

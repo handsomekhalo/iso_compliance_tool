@@ -50,7 +50,6 @@ def csrf(request):
     """
     token = get_token(request)
 
-    print(f"CSRF token set: {token}")  # Debugging line
     return JsonResponse({'csrfToken': token})
 
 
@@ -172,7 +171,6 @@ def login(request):
 
 @csrf_exempt
 def upload_reconciliation(request):
-    print("Received upload_reconciliation request")  # Debugging line
     """
     Proxy endpoint:
     Browser → Django view → DRF upload_reconciliation_api
@@ -208,7 +206,6 @@ def upload_reconciliation(request):
         # 2. Validate token + bank
         # ---------------------------------------
         try:
-            print(f"Validating token: {token}")  # Debugging line
             token_obj = Token.objects.select_related("user").get(key=token)
             user = token_obj.user
             bank = Bank.objects.get(user=user)
@@ -218,7 +215,6 @@ def upload_reconciliation(request):
                 status=401
             )
         except Bank.DoesNotExist:
-            print(f"No bank found for user: {user.email}")  # Debugging line
             return JsonResponse(
                 {"status": "error", "message": "Bank not found"},
                 status=404
@@ -228,9 +224,7 @@ def upload_reconciliation(request):
         # 3. Validate uploaded file
         # ---------------------------------------
         uploaded_file = request.FILES.get("file_name")
-        print(f"Uploaded file: {uploaded_file}")  # Debugging line
         if not uploaded_file:
-            print("No file uploaded")  # Debugging line
             return JsonResponse(
                 {"status": "error", "message": "No file uploaded"},
                 status=400
@@ -259,11 +253,8 @@ def upload_reconciliation(request):
         if request.POST.get("bank_name"):
             data["bank_name"] = request.POST.get("bank_name")
 
-            print(f"Received bank_name: {data['bank_name']}")  # Debugging line
 
-        print(f"Forwarding file: {uploaded_file.name}, size: {uploaded_file.size} bytes")  # Debugging line
         url = f"{host_url(request)}{reverse_lazy('upload_reconciliation_api')}"
-        print(f"Forwarding to: {url}")  # add this
 
         response = requests.post(
             url,
@@ -363,7 +354,6 @@ def list_reconciliations(request):
         # 5. Call DRF reconciliation API
         response = requests.get(reconciliation_url, headers=headers, timeout=10)
         
-        # DEBUG: Print response details BEFORE raise_for_status
      
         
         # Check if response is successful
