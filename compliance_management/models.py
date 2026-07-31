@@ -97,18 +97,57 @@ class Bank(models.Model):
         """
         if not self.api_key:
             self.api_key = self.generate_api_key()
- 
+
         if not self.iso_profile:
-            # FIX: now safe — is_active exists on ISOProfile
-            self.iso_profile = (
-                ISOProfile.objects
-                .filter(is_default=True, is_active=True)
-                .order_by("id")
-                .first()
-            )
- 
+            self.iso_profile = self._create_dedicated_profile()
+
         super().save(*args, **kwargs)
  
+        # if not self.iso_profile:
+        #     # FIX: now safe — is_active exists on ISOProfile
+        #     self.iso_profile = (
+        #         ISOProfile.objects
+        #         .filter(is_default=True, is_active=True)
+        #         .order_by("id")
+        #         .first()
+        #     )
+ 
+        # super().save(*args, **kwargs)
+    def _create_dedicated_profile(self):
+        template = (
+            ISOProfile.objects
+            .filter(is_default=True, is_active=True)
+            .order_by("id")
+            .first()
+        )
+        if not template:
+            return None
+
+        profile = ISOProfile.objects.create(
+            name=f"{self.name} Profile",
+            message_type=template.message_type,
+            version=template.version,
+            description=f"Cloned from '{template.name}' on bank registration.",
+            is_default=False,
+            is_active=True,
+            requires_structured_remittance=template.requires_structured_remittance,
+            allows_unstructured_remittance=template.allows_unstructured_remittance,
+            max_remittance_length=template.max_remittance_length,
+            strict_schema_validation=template.strict_schema_validation,
+        )
+        ISOFieldRule.objects.bulk_create([
+            ISOFieldRule(
+                iso_profile=profile,
+                field_path=rule.field_path,
+                required=rule.required,
+                max_length=rule.max_length,
+                regex=rule.regex,
+                weight=rule.weight,
+            )
+            for rule in ISOFieldRule.objects.filter(iso_profile=template)
+        ])
+        return profile
+    
     @staticmethod
     def generate_api_key():
         """Generate a secure, URL-safe API key."""

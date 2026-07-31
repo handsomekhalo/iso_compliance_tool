@@ -165,3 +165,5 @@ Watch out for these potential competitors:
 - **Build vs Buy**: Larger banks might build in-house
 
 **Your advantage**: Purpose-built for SA market, cost-effective, fast implementation, modern tech stack
+
+The Integration Pain Point: Older banks run on very old "legacy" computer systems. Your SaaS can act as a simple translator box. They send you their old data format, your software instantly cleans it and formats it into the complex ISO 20022 XML format, and sends it on.

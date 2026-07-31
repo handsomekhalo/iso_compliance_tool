@@ -34,3 +34,5 @@ Compliant with: FAIS Act, NPS Act, FIC Act, POPIA
 
 ## 👨‍💻 Author
 Titus Monaheng - [LinkedIn](http://www.linkedin.com/in/khalo-monaheng-b6a821b0) | [Email](titus.khalomonaheng@gmail.com)
+
+The Integration Pain Point: Older banks run on very old "legacy" computer systems. Your SaaS can act as a simple translator box. They send you their old data format, your software instantly cleans it and formats it into the complex ISO 20022 XML format, and sends it on.

@@ -1,8 +1,7 @@
 from django.urls import path
 
-from compliance_management.export_view import export_reconciliation_api
 from . import views
-from compliance_management.api.views import iso_field_rule_detail_api, iso_field_rules_api, list_reconciliations_api
+from compliance_management.api.views import export_reconciliation_api, iso_field_rule_detail_api, iso_field_rules_api, list_reconciliations_api
 
 
 
@@ -23,9 +22,10 @@ urlpatterns = [
     path('invite_user_api/',views.invite_user_api,name='invite_user_api'),
     path('update_user_role_api/<int:user_id>/',views.update_user_role_api, name='update_user_role_api'),
     path('remove_user_api/<int:user_id>/',            views.remove_user_api,      name='remove_user_api'),
-    path("reconcile/<int:log_id>/export/", export_reconciliation_api, name="reconcile-export"),
     path('activate_user_api/<int:user_id>/', views.activate_user_api, name='activate_user_api'),
     path('iso_field_rule_detail_api/<int:profile_id>/<int:rule_id>/', iso_field_rule_detail_api, name='iso_field_rule_detail_api'),
     path('iso_field_rules_api/<int:profile_id>/', iso_field_rules_api, name='iso_field_rules_api'),
-    path('logout_api/', views.logout_api, name='logout_api'),    
+    path('logout_api/', views.logout_api, name='logout_api'), 
+    path("reconcile/<int:log_id>/export/", export_reconciliation_api, name="reconcile-export"),
+   
 ]

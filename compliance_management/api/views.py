@@ -1,7 +1,9 @@
 import json
+import profile
 import random
 import re
 import time
+from django.http import HttpResponse
 from django.utils import timezone # ⬅️ CORRECT
 from django.contrib.auth import authenticate
 from rest_framework.authtoken.models import Token
@@ -41,6 +43,7 @@ from rest_framework import (
 #     permission_classes
 # )
 
+from compliance_management.export_view import _build_csv, _build_pdf
 from compliance_management.models import Bank, ISODocument, ISOFieldRule, ISOProfile, ISOReconciliationLog
 from compliance_management.reconcilliation_util import delete_from_cloud_storage, format_reconciliation_result, generate_xrpl_hash, parse_iso20022_file, parse_iso20022_xml, upload_to_cloud_storage
 from compliance_management.views import login
@@ -112,7 +115,8 @@ def login_api(request):
 
     # ── Role context (if UserRole exists) ─────────────────────────────────
     try:
-        role = user.userrole
+        # role = user.userrole
+        role = user.role
         response_data["role"] = role.role
         response_data["user_type"] = role.role
     except (UserRole.DoesNotExist, AttributeError):
@@ -843,10 +847,27 @@ def iso_field_rules_api(request, profile_id):
 
     # Bank scoping — non-superadmins can only touch their own bank's profiles
     try:
-        role = request.user.userrole
+        # role = request.user.userrole
+        role = request.user.role
+
         is_super = role.role == 'super_admin'
     except (UserRole.DoesNotExist, AttributeError):
         is_super = request.user.is_superuser
+    
+    if not is_super:
+        try:
+            bank = request.user.bank
+        except Exception:
+            return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.is_default:
+            return Response(
+                {'message': 'Cannot modify the shared default profile.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not profile.banks.filter(pk=bank.pk).exists():
+            return Response({'message': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
 
     # if not is_super:
     #     try:
@@ -909,11 +930,25 @@ def iso_field_rule_detail_api(request, profile_id, rule_id):
 
     # Bank scoping
     try:
-        role = request.user.userrole
+        role = request.user.role
         is_super = role.role == 'super_admin'
     except (UserRole.DoesNotExist, AttributeError):
         is_super = request.user.is_superuser
 
+    if not is_super:
+        try:
+            bank = request.user.bank
+        except Exception:
+            return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if profile.is_default:
+            return Response(
+                {'message': 'Cannot modify the shared default profile.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        if not profile.banks.filter(pk=bank.pk).exists():
+            return Response({'message': 'Access denied.'}, status=status.HTTP_403_FORBIDDEN)
     # if not is_super:
     #     try:
     #         bank = request.user.bank
@@ -975,3 +1010,62 @@ def logout_api(request):
             {'message': 'No active session found.'},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The view
+# ─────────────────────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAnalystOrAbove])
+def export_reconciliation_api(request, log_id):
+    """
+    GET /api/reconcile/<log_id>/export/?format=csv
+    GET /api/reconcile/<log_id>/export/?format=pdf
+
+    Returns a file download of the reconciliation results.
+    Scoped to the requesting user's bank (super_admin sees all).
+
+    Query params:
+        format  — "csv" (default) | "pdf"
+    """
+    export_format = request.query_params.get("format", "csv").lower().strip()
+
+    if export_format not in ("csv", "pdf"):
+        return Response(
+            {"error": "Invalid format. Use ?format=csv or ?format=pdf"},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    log, error = _get_log_or_404(log_id, request)
+    if error:
+        return error
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    filename_base = f"randrail_reconciliation_{log.pk}_{timestamp}"
+
+    if export_format == "csv":
+        try:
+            csv_content = _build_csv(log)
+        except Exception as exc:
+            return Response(
+                {"error": f"CSV generation failed: {str(exc)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        response = HttpResponse(csv_content, content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = f'attachment; filename="{filename_base}.csv"'
+        response["X-RandRail-Log-ID"] = str(log.pk)
+        return response
+
+    # PDF path
+    try:
+        pdf_bytes = _build_pdf(log)
+    except Exception as exc:
+        return Response(
+            {"error": f"PDF generation failed: {str(exc)}"},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="{filename_base}.pdf"'
+    response["X-RandRail-Log-ID"] = str(log.pk)
+    return response
