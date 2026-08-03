@@ -1,8 +1,9 @@
 "use client";
 
-import { useAuth } from "../../../../AuthContext";
-import Navbar from "../System_Management_Components/dashboard/SideBarComponent/navheader";
-import Sidebar from "../System_Management_Components/dashboard/SideBarComponent/sidebar";
+import { useAuth } from "../../../AuthContext";
+import Navbar from "../Components/System_Management_Components/dashboard/SideBarComponent/navheader";
+
+import Sidebar from "../Components/System_Management_Components/dashboard/SideBarComponent/sidebar";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 

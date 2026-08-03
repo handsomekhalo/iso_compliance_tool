@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 // import LoginPage from './Login_Component/login';
-import LoginPage from './Login_Component/login';
+import LoginPage from '../../Login_Component/login';
+import RegisterPage from '../Components/Register/RegisterComponent';
 
 
 // import RegisterPage from './Register_Component/register';// import Dashboard from './Components/System_Management_Component/dashboard/dashboard';
@@ -29,7 +30,7 @@ export default function Home() {
           </>
         ) : (
           <>
-            {/* <RegisterPage /> */}
+            <RegisterPage />
             <p className="text-sm mt-4">
               Already have an account?{' '}
               <button

@@ -1,24 +1,26 @@
 'use client';
 
-// import backendApi from '@/utils/backendApi';
-import { useState, useEffect } from 'react';
-import { useAuth } from '@/AuthContext';// import backendApi from '@/utils/backendApi';
-// import backendApi from '../utils/backendApi';
-import backendApi from '../utils/backendApi';
-// frontend\src\utils\backendApi.js
-
-import { useRouter } from 'next/navigation';  // Correct import for App Router
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Loader2, ShieldCheck } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "../../AuthContext";
+import backendApi from "../utils/backendApi";
+import { AuthShell } from "../../AuthShell";
 
 export default function LoginPage() {
-  const { login: authLogin } = useAuth();
+  const { login } = useAuth();
+  const router = useRouter();
   const [csrfToken, setCsrfToken] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter();  // This will now work with App Router
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Fetch CSRF Token
+  // Fetch CSRF token on mount — same flow the backend expects
   useEffect(() => {
     backendApi
       .get('/compliance_management/csrf/', { withCredentials: true })
@@ -32,25 +34,26 @@ export default function LoginPage() {
       });
   }, []);
 
-  const handleSubmit = async (e) => {
+  async function onSubmit(e) {
     e.preventDefault();
-    setErrors('');
-    setIsSubmitting(true);
+    setError(null);
+    if (!email || !password) {
+      setError("Enter both your work email and password.");
+      return;
+    }
 
     const csrfFromCookies = document.cookie
       .split('; ')
       .find((row) => row.startsWith('csrftoken='))?.split('=')[1];
-
     const tokenToUse = csrfToken || csrfFromCookies;
 
     if (!tokenToUse) {
-      setErrors('CSRF token missing. Please refresh and try again.');
-      setIsSubmitting(false);
+      setError('CSRF token missing. Please refresh and try again.');
       return;
     }
 
+    setSubmitting(true);
     try {
-      console.log('Sending login request...');
       const response = await backendApi.post(
         '/compliance_management_api/login_api/',
         { email, password },
@@ -63,107 +66,236 @@ export default function LoginPage() {
         }
       );
 
-      console.log('Login response:', response.data);
-      
       if (response.data.status === "success" && response.data.token) {
-        console.log('Login successful!');
-        const token = response.data.token;
-        const user = response.data.user;
-        
-        // Store authentication data in context
-        authLogin(token, tokenToUse);
-        
-        // Store in localStorage with CORRECT KEYS matching what AuthContext expects
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('csrfToken', tokenToUse);
-        localStorage.setItem('user', JSON.stringify(user));
-
-        console.log('Authentication tokens stored:', { authToken: token, csrfToken: tokenToUse });
-        console.log('Redirecting to dashboard...');
-        
-        // Correctly navigate to /dashboard using the router
-        // router.push('/Components/System_Management_Component/dashboard');
-        
-        setTimeout(() => {
-          router.push('/Components/System_Management_Components/dashboard');
-          // if (user.role === 'admin') {
-          //       router.push('/Components/System_Management_Components/dashboard');
-          //   } else if (user.role === 'artist') {
-          //       router.push('/artist/dashboard');
-          //   }
-
-        }, 100);
+        login({
+          token: response.data.token,
+          csrf: tokenToUse,
+          user: response.data.user,
+        });
+        router.replace("/dashboard");
       } else {
-        console.log('Login failed:');
-        setErrors(response.data.message || 'Login failed. Try again.');
+        setError(response.data.message || 'Login failed. Try again.');
       }
     } catch (err) {
       console.error('Login error:', err);
       if (err.response) {
-        setErrors(err.response.data?.message || 'An error occurred during login.');
+        setError(err.response.data?.message || 'An error occurred during login.');
       } else {
-        setErrors('Network error. Please check your connection.');
+        setError('Network error. Please check your connection.');
       }
     } finally {
-      setIsSubmitting(false);
+      setSubmitting(false);
     }
-  };
+  }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col justify-center px-6 py-12 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-        <h2 className="mt-10 text-center text-2xl font-bold text-gray-900">
-          Sign in to your account
-        </h2>
-      </div>
-
-      <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-900">
-              Email address
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-indigo-600"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-900">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-indigo-600"
-            />
-          </div>
-
-          {errors && <p className="text-sm text-red-600">{errors}</p>}
-
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className={`w-full rounded-md bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-500 ${
-              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {isSubmitting ? 'Signing in...' : 'Sign in'}
-          </button>
-        </form>
-      </div>
-    </div>
+    <AuthShell
+      title="Sign in"
+      subtitle="Institution workspace access for compliance and settlement operations."
+    >
+      <form onSubmit={onSubmit} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="email">Work email</Label>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Password</Label>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </div>
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <Button type="submit" className="w-full" disabled={submitting}>
+          {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
+          {submitting ? "Verifying" : "Sign in"}
+        </Button>
+      </form>
+      <p className="mt-6 text-sm text-muted-foreground">
+        No institution account yet?{" "}
+        <Link href="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+          Register your bank
+        </Link>
+      </p>
+    </AuthShell>
   );
 }
+
+// 'use client';
+
+// // import backendApi from '@/utils/backendApi';
+// import { useState, useEffect } from 'react';
+// import  {useAuth}  from '../../AuthContext';
+// // import backendApi from '../utils/backendApi';
+// import backendApi from '../utils/backendApi';
+// // frontend\src\utils\backendApi.js
+
+// import { useRouter } from 'next/navigation';  // Correct import for App Router
+
+// export default function LoginPage() {
+//   const { login: authLogin } = useAuth();
+//   const [csrfToken, setCsrfToken] = useState('');
+//   const [email, setEmail] = useState('');
+//   const [password, setPassword] = useState('');
+//   const [errors, setErrors] = useState('');
+//   const [isSubmitting, setIsSubmitting] = useState(false);
+//   const router = useRouter();  // This will now work with App Router
+
+//   // Fetch CSRF Token
+//   useEffect(() => {
+//     backendApi
+//       .get('/compliance_management/csrf/', { withCredentials: true })
+//       .then((res) => {
+//         if (res.data && res.data.csrfToken) {
+//           setCsrfToken(res.data.csrfToken);
+//         }
+//       })
+//       .catch((err) => {
+//         console.error('Failed to fetch CSRF:', err);
+//       });
+//   }, []);
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setErrors('');
+//     setIsSubmitting(true);
+
+//     const csrfFromCookies = document.cookie
+//       .split('; ')
+//       .find((row) => row.startsWith('csrftoken='))?.split('=')[1];
+
+//     const tokenToUse = csrfToken || csrfFromCookies;
+
+//     if (!tokenToUse) {
+//       setErrors('CSRF token missing. Please refresh and try again.');
+//       setIsSubmitting(false);
+//       return;
+//     }
+
+//     try {
+//       console.log('Sending login request...');
+//       const response = await backendApi.post(
+//         '/compliance_management_api/login_api/',
+//         { email, password },
+//         {
+//           headers: {
+//             'X-CSRFToken': tokenToUse,
+//             'Content-Type': 'application/json',
+//           },
+//           withCredentials: true,
+//         }
+//       );
+
+//       console.log('Login response:', response.data);
+      
+//       if (response.data.status === "success" && response.data.token) {
+//         console.log('Login successful!');
+//         const token = response.data.token;
+//         const user = response.data.user;
+        
+//         // Store authentication data in context
+//         authLogin(token, tokenToUse);
+        
+//         // Store in localStorage with CORRECT KEYS matching what AuthContext expects
+//         localStorage.setItem('authToken', token);
+//         localStorage.setItem('csrfToken', tokenToUse);
+//         localStorage.setItem('user', JSON.stringify(user));
+
+//         console.log('Authentication tokens stored:', { authToken: token, csrfToken: tokenToUse });
+//         console.log('Redirecting to dashboard...');
+        
+//         // Correctly navigate to /dashboard using the router
+//         // router.push('/Components/System_Management_Component/dashboard');
+        
+//         setTimeout(() => {
+//           router.push('/Components/System_Management_Components/dashboard');
+//           // if (user.role === 'admin') {
+//           //       router.push('/Components/System_Management_Components/dashboard');
+//           //   } else if (user.role === 'artist') {
+//           //       router.push('/artist/dashboard');
+//           //   }
+
+//         }, 100);
+//       } else {
+//         console.log('Login failed:');
+//         setErrors(response.data.message || 'Login failed. Try again.');
+//       }
+//     } catch (err) {
+//       console.error('Login error:', err);
+//       if (err.response) {
+//         setErrors(err.response.data?.message || 'An error occurred during login.');
+//       } else {
+//         setErrors('Network error. Please check your connection.');
+//       }
+//     } finally {
+//       setIsSubmitting(false);
+//     }
+//   };
+
+//   return (
+//     <div className="flex min-h-full flex-1 flex-col justify-center px-6 py-12 lg:px-8">
+//       <div className="sm:mx-auto sm:w-full sm:max-w-sm">
+//         <h2 className="mt-10 text-center text-2xl font-bold text-gray-900">
+//           Sign in to your account
+//         </h2>
+//       </div>
+
+//       <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+//         <form onSubmit={handleSubmit} className="space-y-6">
+//           <div>
+//             <label htmlFor="email" className="block text-sm font-medium text-gray-900">
+//               Email address
+//             </label>
+//             <input
+//               id="email"
+//               name="email"
+//               type="email"
+//               autoComplete="email"
+//               required
+//               value={email}
+//               onChange={(e) => setEmail(e.target.value)}
+//               className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-indigo-600"
+//             />
+//           </div>
+
+//           <div>
+//             <label htmlFor="password" className="block text-sm font-medium text-gray-900">
+//               Password
+//             </label>
+//             <input
+//               id="password"
+//               name="password"
+//               type="password"
+//               autoComplete="current-password"
+//               required
+//               value={password}
+//               onChange={(e) => setPassword(e.target.value)}
+//               className="mt-2 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-400 focus:outline-indigo-600"
+//             />
+//           </div>
+
+//           {errors && <p className="text-sm text-red-600">{errors}</p>}
+
+//           <button
+//             type="submit"
+//             disabled={isSubmitting}
+//             className={`w-full rounded-md bg-indigo-600 px-3 py-2 text-white hover:bg-indigo-500 ${
+//               isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+//             }`}
+//           >
+//             {isSubmitting ? 'Signing in...' : 'Sign in'}
+//           </button>
+//         </form>
+//       </div>
+//     </div>
+//   );
+// }
