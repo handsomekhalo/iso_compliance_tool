@@ -9,8 +9,8 @@ const Sidebar = () => {
 
   const navItems = [
     {
-      title: 'Dashboard',
-      links: [{ href: '/Components/System_Management_Component/dashboard', icon: 'bx bx-home', label: 'Dashboard' }],
+      // title: 'Dashboard',
+      links: [{ href: '/dashboard', icon: 'bx bx-home', label: 'Dashboard' }],
     },
     //     {
     //   title: 'Client Portal',
@@ -19,7 +19,7 @@ const Sidebar = () => {
     {
       title: 'Manage Users',
       links: [
-        {  href: '/Components/System_Management_Component/Usermanagement', 
+        {  href: '/users', 
             icon: 'bx bx-user', label: 'View Users' } // Link to /users page
       
   
