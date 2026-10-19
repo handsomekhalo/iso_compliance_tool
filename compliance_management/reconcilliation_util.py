@@ -60,6 +60,9 @@ def parse_iso20022_xml(xml_content: str, iso_profile: Any) -> Tuple[int, int, Li
             violations = _evaluate_transaction_rules(txn, all_rules)
             
             _evaluate_structured_remittance(txn, iso_profile, violations)
+            _evaluate_basic_content_checks(txn, violations)  # Step 4
+
+
 
             if violations:
                 mismatches.append({
@@ -199,6 +202,65 @@ def _evaluate_transaction_rules(txn: etree._Element, all_rules: list) -> List[st
                 pass
 
     return violations
+
+def _evaluate_basic_content_checks(txn: etree._Element, violations: list) -> None:
+    """
+    Built-in content checks (not from DB rules).
+    Mutates violations list in place.
+    """
+    # ----- 1. Amount: present, numeric, > 0 -----
+    amount_elems = txn.xpath('.//*[local-name()="InstdAmt"]')
+    if not amount_elems:
+        amount_elems = txn.xpath('.//*[local-name()="Amt"]')
+
+    if not amount_elems:
+        violations.append("content:amount_missing")
+    else:
+        raw = (amount_elems[0].text or "").strip()
+        if not raw:
+            # container <Amt> — try child text
+            texts = amount_elems[0].xpath(".//text()")
+            raw = next((t.strip() for t in texts if t and t.strip()), "")
+
+        try:
+            amount_val = float(raw.replace(",", ""))
+            if amount_val <= 0:
+                violations.append("content:amount_not_positive")
+        except (ValueError, TypeError):
+            violations.append("content:amount_not_numeric")
+
+    # ----- 2. Currency: 3-letter code when present -----
+    # Prefer Ccy attribute on InstdAmt, else <Ccy> element
+    ccy = None
+    instd = txn.xpath('.//*[local-name()="InstdAmt"]')
+    if instd is not None and len(instd) > 0:
+        ccy = instd[0].get("Ccy") or instd[0].get("ccy")
+
+    if not ccy:
+        ccy_elems = txn.xpath('.//*[local-name()="Ccy"]')
+        if ccy_elems:
+            ccy = (ccy_elems[0].text or "").strip()
+
+    if ccy is not None and ccy != "":
+        if not re.match(r"^[A-Z]{3}$", ccy.strip().upper()):
+            violations.append("content:currency_invalid")
+
+    # ----- 3. Simple length checks on common ID-style fields -----
+    id_checks = [
+        ("EndToEndId", 1, 35),
+        ("InstrId", 1, 35),
+        ("IBAN", 15, 34),
+        ("BIC", 8, 11),
+    ]
+    for tag, min_len, max_len in id_checks:
+        elems = txn.xpath(f'.//*[local-name()="{tag}"]')
+        if not elems:
+            continue  # optional: only validate when present
+        value = (elems[0].text or "").strip()
+        if not value:
+            continue
+        if len(value) < min_len or len(value) > max_len:
+            violations.append(f"content:{tag}_length")
 
 # def _evaluate_transaction_rules(txn: etree._Element, all_rules: list) -> List[str]:
 #     """
@@ -531,6 +593,7 @@ def format_reconciliation_result(parsed_data, iso_profile=None):
             rules_applied.append(rule_result)
 
         normalised_score = round((txn_score / total_possible_weight) * 100) if total_possible_weight else 0
+        raw_violations = list(txn.get('violations', []))
 
         scored_transactions.append({
             'transaction_index': txn.get('transaction_index'),
@@ -538,7 +601,17 @@ def format_reconciliation_result(parsed_data, iso_profile=None):
             'issues':            txn_issues,
             'rules_applied':     rules_applied,
             'original_issue':    txn.get('issue', ''),
+            'violations':        raw_violations,  # includes content:* codes
         })
+
+        
+        # scored_transactions.append({
+        #     'transaction_index': txn.get('transaction_index'),
+        #     'compliance_score':  normalised_score,
+        #     'issues':            txn_issues,
+        #     'rules_applied':     rules_applied,
+        #     'original_issue':    txn.get('issue', ''),
+        # })
 
     # for txn in transactions:
     #     txn_issues = []

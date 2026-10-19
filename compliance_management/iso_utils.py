@@ -75,13 +75,23 @@ def format_reconciliation_result(parsed_data, iso_profile=None):
 
         normalised_score = round((txn_score / total_possible_weight) * 100) if total_possible_weight else 0
 
+        raw_violations = list(txn.get('violations', []))
+
         scored_transactions.append({
             'transaction_index': txn.get('transaction_index'),
             'compliance_score':  normalised_score,
             'issues':            txn_issues,
             'rules_applied':     rules_applied,
             'original_issue':    txn.get('issue', ''),
+            'violations':        raw_violations,  # includes content:* codes
         })
+        # scored_transactions.append({
+        #     'transaction_index': txn.get('transaction_index'),
+        #     'compliance_score':  normalised_score,
+        #     'issues':            txn_issues,
+        #     'rules_applied':     rules_applied,
+        #     'original_issue':    txn.get('issue', ''),
+        # })
     # ── Summary ────────────────────────────────────────────────────────────
     scores = [t['compliance_score'] for t in scored_transactions]
     avg_score = round(sum(scores) / len(scores)) if scores else 0
