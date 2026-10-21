@@ -501,27 +501,6 @@ def generate_xrpl_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
-# def format_reconciliation_result(total: int, mismatches: int, details: List[Dict]) -> Dict:
-#     """Format reconciliation results for storage"""
-#     accuracy = ((total - mismatches) / total * 100) if total > 0 else 0
-    
-#     return {
-#         'summary': {
-#             'total_transactions': total,
-#             'successful': total - mismatches,
-#             'failed': mismatches,
-#             'accuracy_percentage': round(accuracy, 2)
-#         },
-#         'mismatches': details,
-#         'validation_rules_applied': [
-#             'Mandatory field presence check',
-#             'Amount field validation',
-#             'Debtor/Creditor information check'
-#         ]
-#     }
-
-
-
 
 
 
