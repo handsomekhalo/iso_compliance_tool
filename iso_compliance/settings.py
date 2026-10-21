@@ -84,18 +84,17 @@ INSTALLED_APPS = [
 
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Must be first
-    'whitenoise.middleware.WhiteNoiseMiddleware',  # Add this
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware', 
-
+    "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
@@ -136,24 +135,7 @@ DATABASES = {
     }
 }
 
-# DATABASES = {
-#     'default': {
-#         # 'ENGINE': 'django.db.backends.postgresql',
-        
-#         'NAME': config('PGDATABASE', default='railway'),
-#         'USER': config('PGUSER', default='postgres'),
-#         'PASSWORD': config('PGPASSWORD', default=''),
-#         'HOST': config('PGHOST', default='localhost'),
-#         'PORT': config('PGPORT', default='5432'),
-#     }
-# }
-# DATABASES = {
-#     'default': dj_database_url.config(
-#         default=config('DATABASE_URL', default='sqlite:///db.sqlite3'),
-#         conn_max_age=600,
-#         conn_health_checks=True,
-#     )
-# }
+
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -243,7 +225,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 
 
 # CORS Settings - More permissive for debugging
-CORS_ALLOW_ALL_ORIGINS = True  # Temporarily set to True for debugging
+CORS_ALLOW_ALL_ORIGINS =False  # Temporarily set to True for debugging
 CORS_ALLOW_CREDENTIALS = True
 
 # Alternative: Specific origins (use this after debugging)
@@ -254,26 +236,32 @@ CORS_ALLOW_CREDENTIALS = True
 # CORS Settings (for Next.js frontend)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
-
-
-        # Your Vercel domain
+    "http://127.0.0.1:3000",
+    "https://iso-compliance-tool.vercel.app",
 ]
 
 
 # CSRF_TRUSTED_ORIGINS = [
 #     "https://iso-compliance-tool.vercel.app/"
 # ]
+# Optional: allow extra origins from env (comma-separated)
+_extra_cors = config("CORS_ALLOWED_ORIGINS", default="")
+if _extra_cors:
+    CORS_ALLOWED_ORIGINS += [o.strip() for o in _extra_cors.split(",") if o.strip()]
 
 CORS_ALLOW_CREDENTIALS = True
 
 
-CORS_ALLOW_METHODS = [
-    'DELETE',
-    'GET',
-    'OPTIONS',
-    'PATCH',
-    'POST',
-    'PUT',
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "authorization",
+    "content-type",
+    "dnt",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
 ]
 
 CORS_ALLOW_HEADERS = [
@@ -304,12 +292,16 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "https://iso-compliance-tool.vercel.app",
+
 ]
 
 # Session settings
 SESSION_COOKIE_SECURE = False
 SESSION_COOKIE_SAMESITE = 'Lax'
 
+if DEBUG:
+    CORS_ALLOW_ALL_ORIGINS = True  # local dev only
 
 
 # BACKBLAZE
