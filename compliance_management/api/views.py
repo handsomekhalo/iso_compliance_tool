@@ -43,8 +43,9 @@ from rest_framework import (
 #     permission_classes
 # )
 
-from compliance_management.export_view import _build_csv, _build_pdf
+from compliance_management.export_view import _build_csv, _build_pdf, _get_log_or_404
 from compliance_management.models import Bank, ISODocument, ISOFieldRule, ISOProfile, ISOReconciliationLog
+from compliance_management.permissions_utils import _bank_for_user
 from compliance_management.reconcilliation_util import delete_from_cloud_storage, format_reconciliation_result, generate_xrpl_hash, parse_iso20022_file, parse_iso20022_xml, upload_to_cloud_storage
 from compliance_management.views import login
 from compliance_management.models import UserRole, RoleName
@@ -439,7 +440,8 @@ def list_reconciliations_api(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
+# @permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
+@permission_classes([IsAuthenticated, IsActiveBank])
 # @permission_classes([IsAuthenticated])
 def get_reconciliation_detail_api(request, log_id):
     """
@@ -519,7 +521,7 @@ def get_reconciliation_stats_api(request):
  
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsActiveBank])
 def list_documents_api(request):
     """
     GET /api/reconcile/documents/
@@ -559,7 +561,8 @@ def list_documents_api(request):
 
 @api_view(['GET'])
 # @permission_classes([IsAuthenticated])
-@permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
+# @permission_classes([IsAuthenticated, IsActiveBank, IsSameBankOrSuperAdmin])
+@permission_classes([IsAuthenticated, IsActiveBank])
 def get_document_detail_api(request, document_id):
     """
     GET /api/reconcile/documents/<document_id>/
@@ -617,25 +620,6 @@ def get_my_role_api(request):
     }, status=status.HTTP_200_OK)
 
 
-# @api_view(['GET'])
-# @permission_classes([IsAuthenticated, IsInstitutionAdmin])
-# def list_bank_users_api(request):
-#     """
-#     GET /api/users/
-#     List all users in the requesting admin's bank.
-#     Institution Admin and Super Admin only.
-#     """
-#     try:
-#         bank = request.user.bank
-#     except Exception:
-#         return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
-
-#     roles = UserRole.objects.filter(bank=bank).select_related('user')
-#     serializer = UserRoleSerializer(roles, many=True)
-#     return Response({
-#         'message': 'Users retrieved successfully',
-#         'data': serializer.data
-#     }, status=status.HTTP_200_OK)
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsInstitutionAdmin])
 def list_bank_users_api(request):
@@ -645,7 +629,9 @@ def list_bank_users_api(request):
     Filters out inactive users by default.
     """
     try:
-        bank = request.user.bank
+        # bank = request.user.bank
+        bank = _bank_for_user(request.user)
+
     except Exception:
         return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -698,7 +684,9 @@ def invite_user_api(request):
         )
 
     try:
-        bank = request.user.bank
+        # bank = request.user.bank
+        bank = _bank_for_user(request.user)
+
     except Exception:
         return Response({'message': 'Bank not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -742,7 +730,9 @@ def update_user_role_api(request, user_id):
         )
 
     try:
-        bank = request.user.bank
+        # bank = request.user.bank
+        bank = _bank_for_user(request.user)
+
         user_role = UserRole.objects.get(user__id=user_id, bank=bank)
     except UserRole.DoesNotExist:
         return Response(
@@ -773,7 +763,9 @@ def remove_user_api(request, user_id):
         )
 
     try:
-        bank = request.user.bank
+        # bank = request.user.bank
+        bank = _bank_for_user(request.user)
+
         user_role = UserRole.objects.get(user__id=user_id, bank=bank)
     except UserRole.DoesNotExist:
         return Response(
@@ -804,7 +796,8 @@ def activate_user_api(request, user_id):
         )
 
     try:
-        bank = request.user.bank
+        # bank = request.user.bank
+        bank = _bank_for_user(request.user)
         user_role = UserRole.objects.get(user__id=user_id, bank=bank)
     except UserRole.DoesNotExist:
         return Response(
@@ -856,7 +849,9 @@ def iso_field_rules_api(request, profile_id):
     
     if not is_super:
         try:
-            bank = request.user.bank
+            # bank = request.user.bank
+            bank = _bank_for_user(request.user)
+
         except Exception:
             return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -937,7 +932,9 @@ def iso_field_rule_detail_api(request, profile_id, rule_id):
 
     if not is_super:
         try:
-            bank = request.user.bank
+            # bank = request.user.bank
+            bank = _bank_for_user(request.user)
+
         except Exception:
             return Response({'message': 'Bank not found.'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -1017,7 +1014,7 @@ def logout_api(request):
 # ─────────────────────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
-@permission_classes([IsAnalystOrAbove])
+@permission_classes([IsAuthenticated, IsActiveBank, IsAuditorOrAbove])
 def export_reconciliation_api(request, log_id):
     """
     GET /api/reconcile/<log_id>/export/?format=csv
